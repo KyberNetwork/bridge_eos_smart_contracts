@@ -16,6 +16,7 @@
 #include "input_block_4699999.cpp"
 #include "input_block_5.cpp"
 #include "input_block_0.cpp"
+#include "proofs_block_4700000.cpp"
 
 using std::endl;
 using std::cout;
@@ -86,6 +87,12 @@ uint8_t* keccak256(struct ethash_h256 const* ret, uint8_t* input, uint input_siz
     keccakState *st = keccakCreate(256);
     keccakUpdate((uint8_t*)input, 0, input_size, st);
     memcpy((uint8_t*)ret, keccakDigest(st), 32);
+}
+
+uint8_t* keccak256(uint8_t* ret, uint8_t* input, uint input_size) {
+    keccakState *st = keccakCreate(256);
+    keccakUpdate((uint8_t*)input, 0, input_size, st);
+    memcpy(ret, keccakDigest(st), 32);
 }
 
 uint8_t* keccak512(uint8_t* ret, uint8_t* input, uint input_size) {
@@ -171,10 +178,98 @@ static bool ethash_hash(
     return true;
 }
 
+void reverseBytes(uint8_t *ret, uint8_t *data, uint size) {
+    for( int i = 0; i < size; i++ ) {
+        ret[i] = data[size - 1 - i];
+    }
+}
+
+/*
+assume the element is abcd where a, b, c, d are 32 bytes word
+first = concat(reverse(a), reverse(b)) where reverse reverses the bytes
+second = concat(reverse(c), reverse(d))
+conventional encoding of abcd is concat(first, second)
+*/
+void conventional_encoding(uint8_t *ret, uint8_t *data) {
+    reverseBytes(ret , data, 32);
+    reverseBytes(ret + 32, data + 32, 32);
+    reverseBytes(ret + 64, data + 64, 32);
+    reverseBytes(ret + 96, data + 96, 32);
+    return;
+}
+
+/*
+ * Hash function for data element(elementhash) elementhash returns 16 bytes hash of the dataset element.
+    function elementhash(data) => 16bytes {
+          h = keccak256(conventional(data)) // conventional function is defined in dataset element encoding section
+          return last16Bytes(h)
+    }
+ */
+void element_hash(uint8_t *ret /* 16B */, uint8_t *data /* 128B */ ){
+  uint8_t conventional[128];
+  uint8_t full_hash_res[32];
+
+  conventional_encoding(conventional, data);
+  keccak256(full_hash_res, conventional, 128);
+  memcpy(ret, full_hash_res + 16, 16); // last 16 bytes
+  return;
+}
+
+/*
+Hash function for 2 sibling nodes (hash) hash returns 16 bytes hash of 2 consecutive elements in a working level.
+function hash(a, b) => 16bytes {
+  h = keccak256(zeropadded(a), zeropadded(b)) // where zeropadded function prepend 16 bytes of 0 to its param
+  return last16Bytes(h)
+}
+*/
+void hash_siblings(uint8_t *ret, uint8_t *a, uint8_t *b){
+    uint8_t padded_pair[64] = {0};
+    uint8_t full_hash_res[32];
+
+    memcpy(padded_pair, a, 16);
+    memcpy(padded_pair + 32, b, 16);
+    keccak256(full_hash_res, padded_pair, 64);
+    memcpy(ret, full_hash_res + 16, 16); // last 16 bytes
+    return;
+}
+
+void apply_path(uint index,
+                uint8_t *res, //16B
+                uint8_t *full_element, //128B
+                uint8_t *proof[][16], /*does not include root and leaf */
+                uint proof_size) {
+
+   uint8_t leaf[16];
+   uint8_t left[16];
+   uint8_t right[16];
+
+   element_hash(leaf, full_element);
+
+   // direction?
+   for(int i = 0; i < proof_size; i++) {
+       if( index & 0x1 == 0 ) {
+           memcpy(left, leaf, 16);
+           memcpy(right, proof[i], 16);
+       } else {
+           memcpy(right, leaf, 16);
+           memcpy(left, proof[i], 16);
+       }
+       hash_siblings(leaf, left, right);
+       index = index / 2;
+   }
+
+   return leaf;
+}
+
 void test_ethash(std::string *dag_nodes,
                  uint64_t nonce,
                  uint64_t block_number_for_epoch,
                  std::string header_hash_st) {
+
+    uint8_t double_proof_nodes[12][32];
+    for(int i = 0; i < 12; i++) {
+         HexToArr(proofs_4700000[i], double_proof_nodes[i]);
+    }
 
     node full_nodes_arr[128];
     for(int i = 0; i < 128; i++) {
@@ -186,6 +281,7 @@ void test_ethash(std::string *dag_nodes,
 
     uint64_t full_size = ethash_get_datasize(block_number_for_epoch);
 
+
     ethash_return_value_t r;
     bool ret = ethash_hash(&r, full_nodes_arr, full_size, header_hash, nonce);
     if (!ret) {
@@ -194,15 +290,16 @@ void test_ethash(std::string *dag_nodes,
     }
 
     // TODO: verify answer is below difficulty
+    cout << "full_size: " << full_size << endl;
     cout << "RESULT: " << hexStr(r.result.b, 32) << endl;
     cout << "MIXHASH: " << hexStr(r.mix_hash.b, 32) << endl;
 }
 
 int main(int argc, char **argv) {
-    test_ethash(dag_nodes_0, 0x6d61f75f8e1ffecf, 0, "3c311878b188920ac1b95f96c7a18f81d08f1df1cb170d46140e76631f011172");
+    //test_ethash(dag_nodes_0, 0x6d61f75f8e1ffecf, 0, "3c311878b188920ac1b95f96c7a18f81d08f1df1cb170d46140e76631f011172");
     test_ethash(dag_nodes_4700000, 9615896863360164237, 4700000, "de1e91c286c6b05d827e7ac983d3fc566e6139bed9384c711625f9cf1d77749c");
-    test_ethash(dag_nodes_4699999, 2130853672440268436, 4699999,"9bb20d3ef23a6b3cf2665e9779cf94c2de8b5d781c81cc455a1e3afdfd3aa954");
-    test_ethash(dag_nodes_5, 0x0cf446597e767586, 5, "8aa692f0a7bf0444c8e18f85d59f73f20c15e9c314dea0d3ff423b8043625a68");
+    //test_ethash(dag_nodes_4699999, 2130853672440268436, 4699999,"9bb20d3ef23a6b3cf2665e9779cf94c2de8b5d781c81cc455a1e3afdfd3aa954");
+    //test_ethash(dag_nodes_5, 0x0cf446597e767586, 5, "8aa692f0a7bf0444c8e18f85d59f73f20c15e9c314dea0d3ff423b8043625a68");
 
     return 0;
 }
