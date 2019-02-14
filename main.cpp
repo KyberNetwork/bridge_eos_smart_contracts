@@ -243,14 +243,9 @@ void apply_path(uint index,
    uint8_t left[16];
    uint8_t right[16];
 
-   printf("full_element: \n");
-   printBytes(full_element, 128);
-   //uint8_t x[128];
-   //reverseBytes(x, full_element, 128);
-
    element_hash(leaf, full_element);
    printf("leaf after element_hash: \n");
-   printBytes(leaf, 16);
+   printBytes(leaf, 16); //same
 
 
    for(int i = 0; i < proof_size; i++) {
@@ -279,7 +274,6 @@ void test_ethash(std::string *dag_nodes,
     }
 
     //////////////////////////
-    /*
     uint8_t res[16];
     uint8_t proof[25][16];
     for(int i = 0; i < 25; i++) {
@@ -298,7 +292,6 @@ void test_ethash(std::string *dag_nodes,
 
      printBytes(res, 16);
      printf("3cc2c17108326ec9541926506072852f\n");
-     */
     //////////////////////////////
 
 
@@ -322,10 +315,10 @@ void test_ethash(std::string *dag_nodes,
 }
 
 int main(int argc, char **argv) {
-    test_ethash(dag_nodes_0, 0x6d61f75f8e1ffecf, 0, "3c311878b188920ac1b95f96c7a18f81d08f1df1cb170d46140e76631f011172");
+    //test_ethash(dag_nodes_0, 0x6d61f75f8e1ffecf, 0, "3c311878b188920ac1b95f96c7a18f81d08f1df1cb170d46140e76631f011172");
     test_ethash(dag_nodes_4700000, 9615896863360164237, 4700000, "de1e91c286c6b05d827e7ac983d3fc566e6139bed9384c711625f9cf1d77749c");
-    test_ethash(dag_nodes_4699999, 2130853672440268436, 4699999,"9bb20d3ef23a6b3cf2665e9779cf94c2de8b5d781c81cc455a1e3afdfd3aa954");
-    test_ethash(dag_nodes_5, 0x0cf446597e767586, 5, "8aa692f0a7bf0444c8e18f85d59f73f20c15e9c314dea0d3ff423b8043625a68");
+    //test_ethash(dag_nodes_4699999, 2130853672440268436, 4699999,"9bb20d3ef23a6b3cf2665e9779cf94c2de8b5d781c81cc455a1e3afdfd3aa954");
+    //test_ethash(dag_nodes_5, 0x0cf446597e767586, 5, "8aa692f0a7bf0444c8e18f85d59f73f20c15e9c314dea0d3ff423b8043625a68");
 
     return 0;
 }
