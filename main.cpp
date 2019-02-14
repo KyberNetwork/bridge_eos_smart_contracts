@@ -226,8 +226,9 @@ void hash_siblings(uint8_t *ret, uint8_t *a, uint8_t *b){
     uint8_t padded_pair[64] = {0};
     uint8_t full_hash_res[32];
 
-    memcpy(padded_pair, a, 16);
-    memcpy(padded_pair + 32, b, 16);
+    memcpy(padded_pair + 48, a, 16);
+    memcpy(padded_pair + 16, b, 16);
+
     keccak256(full_hash_res, padded_pair, 64);
     memcpy(ret, full_hash_res + 16, 16); // last 16 bytes
     return;
@@ -244,12 +245,10 @@ void apply_path(uint index,
    uint8_t right[16];
 
    element_hash(leaf, full_element);
-   printf("leaf after element_hash: \n");
-   printBytes(leaf, 16); //same
-
 
    for(int i = 0; i < proof_size; i++) {
-       if( index & 0x1 == 0 ) {
+       uint side = index & 0x1;
+       if( side ) {
            memcpy(left, leaf, 16);
            memcpy(right, proof[i], 16);
        } else {
@@ -284,13 +283,15 @@ void test_ethash(std::string *dag_nodes,
     memcpy(full_element, full_nodes_arr[0].bytes, 64);
     memcpy(full_element + 64, full_nodes_arr[1].bytes, 64);
 
-     apply_path(5598412,
-                res,
-                full_element,
-                proof, // does not include root and leaf
-                25);
+    apply_path(5598412,
+               res,
+               full_element,
+               proof, // does not include root and leaf
+               25);
 
+     printf("got merkle root:\n");
      printBytes(res, 16);
+     printf("should be equal:\n");
      printf("3cc2c17108326ec9541926506072852f\n");
     //////////////////////////////
 

@@ -1,5 +1,9 @@
 #include <string.h>
 
+/* difference from tool output:
+	-using 64B elements and not 32B.
+	-each 32 bytes chink is internally is reversed
+*/
 std::string dag_nodes_4700000[128] = {
 "6aee5956c42387e671f69896e01b1c58b444aa2469f71aa5e79fdf7129bad3f095e3d07cb14c3061949498c8095504b4a33d1113981d58ac8a341c214e0007f4",
 "2740db524b11c364469dafe561407e199000c5ff414b133c5c7d2cc0fd09543b70657693476ba8436f2e12f3bf87afb579485a25db3280b9432a956c216b9f3d",
