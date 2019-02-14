@@ -4,7 +4,8 @@ main: main.o
 	rm *.o
 
 main.o: main.cpp
-	g++ -DDEBUG -g -std=c++17 -I . -c main.cpp -fpermissive -Ofast -DHAVE_CONFIG_H
+	g++ -O0 -DDEBUG -g -std=c++17 -I . -c main.cpp -fpermissive -DHAVE_CONFIG_H 
+	#-Ofast
 
 clean:
 	rm *.o
