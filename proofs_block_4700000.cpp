@@ -1,6 +1,7 @@
 #include <string.h>
 
 #define PROOF_LENGTH_4700000 25 // without root and leaf
+#define MAX_PROOF_DEPTH 40 // TODO - duplicate declaration
 
 std::string expected_merkle_root_4700000 = "3cc2c17108326ec9541926506072852f";
 
@@ -20,7 +21,7 @@ uint indices_4700000[] = {
 	-using 16B for each element and not 32B.
 	-switched each pair's first and second item.
 */
-std::string proofs_4700000[][25] = {{
+std::string proofs_4700000[][MAX_PROOF_DEPTH] = {{
 "e258ca424ea31268ca60c7c298d9e6c0",
 "510b20eb85a4984a2032794e96959861",
 "27783fc5cd2e3a264f5acb63f28af09c",

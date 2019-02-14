@@ -207,12 +207,15 @@ void apply_path(uint index,
    memcpy(res, leaf, 16);
 }
 
-static bool ethash_hash(
+static bool hashimoto(
     ethash_return_value_t* ret,
     node const* full_nodes,
     ethash_h256_t const header_hash,
     uint64_t const nonce,
-    uint64_t block_num
+    uint64_t block_num,
+    uint8_t witnesses[][MAX_PROOF_DEPTH][16],
+    uint proof_length,
+    uint8_t *expected_root
 )
 {
     uint64_t full_size = ethash_get_datasize(block_num);
@@ -239,33 +242,19 @@ static bool ethash_hash(
     unsigned const page_size = sizeof(uint32_t) * MIX_WORDS;
     unsigned const num_full_pages = (unsigned) (full_size / page_size);
 
-    //////////////////////////////////////////////
-    uint8_t expected_root[16];
-    HexToArr(expected_merkle_root_4700000, expected_root);
-    uint proof_length = PROOF_LENGTH_4700000;
-    //////////////////////////////////////////////
-
     for (unsigned i = 0; i != ETHASH_ACCESSES; ++i) {
         uint32_t const index = fnv_hash(s_mix->words[0] ^ i, mix->words[i % MIX_WORDS]) % num_full_pages;
 
-        /////////////////////////////////
         if(i < 2) { //TODO: remove check once we figure out how to load 64 proofs
             uint8_t full_element[128];
             uint8_t res[16];
-            uint8_t witness_arr[MAX_PROOF_DEPTH][16];
-
-            for(int m = 0; m < proof_length; m++) {
-                 HexToArr(proofs_4700000[i][m], witness_arr[m]);
-            }
 
             memcpy(full_element, full_nodes[i*2].bytes, 64);
             memcpy(full_element + 64, full_nodes[i*2 + 1].bytes, 64);
 
-            apply_path(index, res, full_element, witness_arr, proof_length);
+            apply_path(index, res, full_element, witnesses[i], proof_length);
             assert(0==memcmp( res, expected_root, 16));
         }
-        ////////////////////////////
-
 
         for (unsigned n = 0; n != MIX_NODES; ++n) {
             node const* dag_node = &full_nodes[i*2 + n];
@@ -295,21 +284,36 @@ static bool ethash_hash(
 }
 
 
-void test_ethash(std::string *dag_nodes,
+void test_hashimoto(std::string *dag_nodes,
                  uint64_t nonce,
                  uint64_t block_num,
-                 std::string header_hash_st) {
+                 std::string header_hash_st,
+                 uint proof_length, //PROOF_LENGTH_4700000
+                 std::string proofs[][MAX_PROOF_DEPTH], //proofs_4700000
+                 std::string expected_merkle_root //expected_merkle_root_4700000
+) {
 
     node full_nodes_arr[128];
     for(int i = 0; i < 128; i++) {
          HexToArr(dag_nodes[i], full_nodes_arr[i].bytes);
     }
 
+    uint8_t witnesses[64][MAX_PROOF_DEPTH][16];
+    for(int i = 0; i < 64; i++) {
+        if(i>=2) break; //TODO: remove check once we figure out how to load 64 proofs
+        for(int m = 0; m < proof_length; m++) {
+             HexToArr(proofs[i][m], witnesses[i][m]);
+        }
+    }
+
+    uint8_t expected_root[16];
+    HexToArr(expected_merkle_root, expected_root);
+
     ethash_h256_t header_hash;
     HexToArr(header_hash_st, header_hash.b);
 
     ethash_return_value_t r;
-    bool ret = ethash_hash(&r, full_nodes_arr, header_hash, nonce, block_num);
+    bool ret = hashimoto(&r, full_nodes_arr, header_hash, nonce, block_num, witnesses, proof_length, expected_root);
     if (!ret) {
         cout << "ETHASH HASHING FAILED" << endl;
         exit(3);
@@ -319,13 +323,17 @@ void test_ethash(std::string *dag_nodes,
     cout << "MIXHASH: " << hexStr(r.mix_hash.b, 32) << endl;
 }
 
-
-
 int main(int argc, char **argv) {
-    //test_ethash(dag_nodes_0, 0x6d61f75f8e1ffecf, 0, "3c311878b188920ac1b95f96c7a18f81d08f1df1cb170d46140e76631f011172");
-    test_ethash(dag_nodes_4700000, 9615896863360164237, 4700000, "de1e91c286c6b05d827e7ac983d3fc566e6139bed9384c711625f9cf1d77749c");
-    //test_ethash(dag_nodes_4699999, 2130853672440268436, 4699999,"9bb20d3ef23a6b3cf2665e9779cf94c2de8b5d781c81cc455a1e3afdfd3aa954");
-    //test_ethash(dag_nodes_5, 0x0cf446597e767586, 5, "8aa692f0a7bf0444c8e18f85d59f73f20c15e9c314dea0d3ff423b8043625a68");
+    //test_hashimoto(dag_nodes_0, 0x6d61f75f8e1ffecf, 0, "3c311878b188920ac1b95f96c7a18f81d08f1df1cb170d46140e76631f011172");
+    test_hashimoto(dag_nodes_4700000,
+                   9615896863360164237,
+                   4700000,
+                   "de1e91c286c6b05d827e7ac983d3fc566e6139bed9384c711625f9cf1d77749c",
+                   PROOF_LENGTH_4700000,
+                   proofs_4700000,
+                   expected_merkle_root_4700000);
+    //test_hashimoto(dag_nodes_4699999, 2130853672440268436, 4699999,"9bb20d3ef23a6b3cf2665e9779cf94c2de8b5d781c81cc455a1e3afdfd3aa954");
+    //test_hashimoto(dag_nodes_5, 0x0cf446597e767586, 5, "8aa692f0a7bf0444c8e18f85d59f73f20c15e9c314dea0d3ff423b8043625a68");
 
     return 0;
 }
