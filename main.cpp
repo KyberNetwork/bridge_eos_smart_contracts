@@ -122,63 +122,6 @@ typedef union node {
     uint64_t double_words[NODE_WORDS / 2];
 } node;
 
-static bool ethash_hash(
-    ethash_return_value_t* ret,
-    node const* full_nodes,
-    uint64_t full_size,
-    ethash_h256_t const header_hash,
-    uint64_t const nonce
-)
-{
-    if (full_size % MIX_WORDS != 0) {
-        return false;
-    }
-
-    // pack hash and nonce together into first 40 bytes of s_mix
-    assert(sizeof(node) * 8 == 512);
-    node s_mix[MIX_NODES + 1];
-    memcpy(s_mix[0].bytes, &header_hash, 32);
-    fix_endian64(s_mix[0].double_words[4], nonce);
-
-    // compute sha3-512 hash and replicate across mix
-    keccak512(s_mix->bytes, s_mix->bytes, 40);
-
-    fix_endian_arr32(s_mix[0].words, 16);
-
-    node* const mix = s_mix + 1;
-    for (uint32_t w = 0; w != MIX_WORDS; ++w) {
-        mix->words[w] = s_mix[0].words[w % NODE_WORDS];
-    }
-
-    unsigned const page_size = sizeof(uint32_t) * MIX_WORDS;
-    unsigned const num_full_pages = (unsigned) (full_size / page_size);
-
-    for (unsigned i = 0; i != ETHASH_ACCESSES; ++i) {
-        uint32_t const index = fnv_hash(s_mix->words[0] ^ i, mix->words[i % MIX_WORDS]) % num_full_pages;
-
-        for (unsigned n = 0; n != MIX_NODES; ++n) {
-            node const* dag_node = &full_nodes[i*2 + n];
-            for (unsigned w = 0; w != NODE_WORDS; ++w) {
-                mix[n].words[w] = fnv_hash(mix[n].words[w], dag_node->words[w]);
-            }
-        }
-    }
-
-    // compress mix
-    for (uint32_t w = 0; w != MIX_WORDS; w += 4) {
-        uint32_t reduction = mix->words[w + 0];
-        reduction = reduction * FNV_PRIME ^ mix->words[w + 1];
-        reduction = reduction * FNV_PRIME ^ mix->words[w + 2];
-        reduction = reduction * FNV_PRIME ^ mix->words[w + 3];
-        mix->words[w / 4] = reduction;
-    }
-
-    fix_endian_arr32(mix->words, MIX_WORDS / 4);
-    memcpy(&ret->mix_hash, mix->bytes, 32);
-    // final Keccak hash
-    keccak256(&ret->result, s_mix->bytes, 64 + 32); // Keccak-256(s + compressed_mix)
-    return true;
-}
 
 void reverseBytes(uint8_t *ret, uint8_t *data, uint size) {
     for( int i = 0; i < size; i++ ) {
@@ -264,13 +207,89 @@ void apply_path(uint index,
    memcpy(res, leaf, 16);
 }
 
-void hashimoto(ethash_h256_t header_hash, //TODO: get rlp header and not just hash
-               uint64_t nonce,
-               uint64_t block_number_for_epoch,
-               node *full_nodes_arr, // 128 elements
-               uint8_t witness_arr[][16]) {// size of MAX_PROOF_LENGTH
+static bool ethash_hash(
+    ethash_return_value_t* ret,
+    node const* full_nodes,
+    uint64_t full_size,
+    ethash_h256_t const header_hash,
+    uint64_t const nonce
+)
+{
+    if (full_size % MIX_WORDS != 0) {
+        return false;
+    }
 
+    // pack hash and nonce together into first 40 bytes of s_mix
+    assert(sizeof(node) * 8 == 512);
+    node s_mix[MIX_NODES + 1];
+    memcpy(s_mix[0].bytes, &header_hash, 32);
+    fix_endian64(s_mix[0].double_words[4], nonce);
+
+    // compute sha3-512 hash and replicate across mix
+    keccak512(s_mix->bytes, s_mix->bytes, 40);
+
+    fix_endian_arr32(s_mix[0].words, 16);
+
+    node* const mix = s_mix + 1;
+    for (uint32_t w = 0; w != MIX_WORDS; ++w) {
+        mix->words[w] = s_mix[0].words[w % NODE_WORDS];
+    }
+
+    unsigned const page_size = sizeof(uint32_t) * MIX_WORDS;
+    unsigned const num_full_pages = (unsigned) (full_size / page_size);
+
+    //////////////////////////////////////////////
+    uint8_t expected_root[16];
+    HexToArr(expected_merkle_root_4700000, expected_root);
+    uint proof_length = PROOF_LENGTH_4700000;
+    //////////////////////////////////////////////
+
+    for (unsigned i = 0; i != ETHASH_ACCESSES; ++i) {
+        uint32_t const index = fnv_hash(s_mix->words[0] ^ i, mix->words[i % MIX_WORDS]) % num_full_pages;
+
+        /////////////////////////////////
+        if(i < 2) { //TODO: remove check once we figure out how to load 64 proofs
+            uint8_t full_element[128];
+            uint8_t res[16];
+            uint8_t witness_arr[MAX_PROOF_DEPTH][16];
+
+            for(int m = 0; m < proof_length; m++) {
+                 HexToArr(proofs_4700000[i][m], witness_arr[m]);
+            }
+
+            memcpy(full_element, full_nodes[i*2].bytes, 64);
+            memcpy(full_element + 64, full_nodes[i*2 + 1].bytes, 64);
+
+            apply_path(indices_4700000[i], res, full_element, witness_arr, proof_length);
+            assert(0==memcmp( res, expected_root, 16));
+        }
+        ////////////////////////////
+
+
+        for (unsigned n = 0; n != MIX_NODES; ++n) {
+            node const* dag_node = &full_nodes[i*2 + n];
+            for (unsigned w = 0; w != NODE_WORDS; ++w) {
+                mix[n].words[w] = fnv_hash(mix[n].words[w], dag_node->words[w]);
+            }
+        }
+    }
+
+    // compress mix
+    for (uint32_t w = 0; w != MIX_WORDS; w += 4) {
+        uint32_t reduction = mix->words[w + 0];
+        reduction = reduction * FNV_PRIME ^ mix->words[w + 1];
+        reduction = reduction * FNV_PRIME ^ mix->words[w + 2];
+        reduction = reduction * FNV_PRIME ^ mix->words[w + 3];
+        mix->words[w / 4] = reduction;
+    }
+
+    fix_endian_arr32(mix->words, MIX_WORDS / 4);
+    memcpy(&ret->mix_hash, mix->bytes, 32);
+    // final Keccak hash
+    keccak256(&ret->result, s_mix->bytes, 64 + 32); // Keccak-256(s + compressed_mix)
+    return true;
 }
+
 
 void test_ethash(std::string *dag_nodes,
                  uint64_t nonce,
@@ -282,42 +301,10 @@ void test_ethash(std::string *dag_nodes,
          HexToArr(dag_nodes[i], full_nodes_arr[i].bytes);
     }
 
-    //////////////////////////
-    uint8_t full_element[128];
-    uint8_t res[16];
-    uint8_t witness_arr[MAX_PROOF_DEPTH][16];
-    uint8_t expected_root[16];
-    HexToArr(expected_merkle_root_4700000, expected_root);
-    uint proof_length = PROOF_LENGTH_4700000;
-
-    for( int k= 0; k < 64; k++) {
-        ////tmp until we figure out how to load 64 proofs
-        if(k==2) break;
-        ///
-
-        for(int i = 0; i < proof_length; i++) {
-             HexToArr(proofs_4700000[k][i], witness_arr[i]);
-        }
-
-        memcpy(full_element, full_nodes_arr[k*2].bytes, 64);
-        memcpy(full_element + 64, full_nodes_arr[k*2 + 1].bytes, 64);
-
-        apply_path(indices_4700000[k],
-                   res,
-                   full_element,
-                   witness_arr, // does not include root and leaf
-                   proof_length);
-
-        assert(0==memcmp( res, expected_root, 16));
-    }
-
-
-
     ethash_h256_t header_hash;
     HexToArr(header_hash_st, header_hash.b);
 
     uint64_t full_size = ethash_get_datasize(block_number_for_epoch);
-
 
     ethash_return_value_t r;
     bool ret = ethash_hash(&r, full_nodes_arr, full_size, header_hash, nonce);
