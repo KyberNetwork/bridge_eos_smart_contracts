@@ -210,11 +210,12 @@ void apply_path(uint index,
 static bool ethash_hash(
     ethash_return_value_t* ret,
     node const* full_nodes,
-    uint64_t full_size,
     ethash_h256_t const header_hash,
-    uint64_t const nonce
+    uint64_t const nonce,
+    uint64_t block_num
 )
 {
+    uint64_t full_size = ethash_get_datasize(block_num);
     if (full_size % MIX_WORDS != 0) {
         return false;
     }
@@ -260,7 +261,7 @@ static bool ethash_hash(
             memcpy(full_element, full_nodes[i*2].bytes, 64);
             memcpy(full_element + 64, full_nodes[i*2 + 1].bytes, 64);
 
-            apply_path(indices_4700000[i], res, full_element, witness_arr, proof_length);
+            apply_path(index, res, full_element, witness_arr, proof_length);
             assert(0==memcmp( res, expected_root, 16));
         }
         ////////////////////////////
@@ -287,13 +288,16 @@ static bool ethash_hash(
     memcpy(&ret->mix_hash, mix->bytes, 32);
     // final Keccak hash
     keccak256(&ret->result, s_mix->bytes, 64 + 32); // Keccak-256(s + compressed_mix)
+
+    // TODO: verify answer is below difficulty
+
     return true;
 }
 
 
 void test_ethash(std::string *dag_nodes,
                  uint64_t nonce,
-                 uint64_t block_number_for_epoch,
+                 uint64_t block_num,
                  std::string header_hash_st) {
 
     node full_nodes_arr[128];
@@ -304,17 +308,13 @@ void test_ethash(std::string *dag_nodes,
     ethash_h256_t header_hash;
     HexToArr(header_hash_st, header_hash.b);
 
-    uint64_t full_size = ethash_get_datasize(block_number_for_epoch);
-
     ethash_return_value_t r;
-    bool ret = ethash_hash(&r, full_nodes_arr, full_size, header_hash, nonce);
+    bool ret = ethash_hash(&r, full_nodes_arr, header_hash, nonce, block_num);
     if (!ret) {
         cout << "ETHASH HASHING FAILED" << endl;
         exit(3);
     }
 
-    // TODO: verify answer is below difficulty
-    cout << "full_size: " << full_size << endl;
     cout << "RESULT: " << hexStr(r.result.b, 32) << endl;
     cout << "MIXHASH: " << hexStr(r.mix_hash.b, 32) << endl;
 }
