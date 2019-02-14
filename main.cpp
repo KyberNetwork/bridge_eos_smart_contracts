@@ -39,6 +39,8 @@ using std::cout;
 #define MIX_WORDS (ETHASH_MIX_BYTES/4) // 32
 #define MIX_NODES (MIX_WORDS / NODE_WORDS) // 2
 
+#define MAX_PROOF_DEPTH 40
+
 #define fix_endian32(dst_ ,src_) dst_ = src_
 #define fix_endian32_same(val_)
 #define fix_endian64(dst_, src_) dst_ = src_
@@ -262,6 +264,14 @@ void apply_path(uint index,
    memcpy(res, leaf, 16);
 }
 
+void hashimoto(ethash_h256_t header_hash, //TODO: get rlp header and not just hash
+               uint64_t nonce,
+               uint64_t block_number_for_epoch,
+               node *full_nodes_arr, // 128 elements
+               uint8_t witness_arr[][16]) {// size of MAX_PROOF_LENGTH
+
+}
+
 void test_ethash(std::string *dag_nodes,
                  uint64_t nonce,
                  uint64_t block_number_for_epoch,
@@ -273,27 +283,34 @@ void test_ethash(std::string *dag_nodes,
     }
 
     //////////////////////////
+    uint8_t full_element[128];
     uint8_t res[16];
-    uint8_t proof[25][16];
-    for(int i = 0; i < 25; i++) {
-         HexToArr(proofs_4700000[i], proof[i]);
+    uint8_t witness_arr[MAX_PROOF_DEPTH][16];
+    uint8_t expected_root[16];
+    HexToArr(expected_merkle_root_4700000, expected_root);
+    uint proof_length = PROOF_LENGTH_4700000;
+
+    for( int k= 0; k < 64; k++) {
+        ////tmp until we figure out how to load 64 proofs
+        if(k==2) break;
+        ///
+
+        for(int i = 0; i < proof_length; i++) {
+             HexToArr(proofs_4700000[k][i], witness_arr[i]);
+        }
+
+        memcpy(full_element, full_nodes_arr[k*2].bytes, 64);
+        memcpy(full_element + 64, full_nodes_arr[k*2 + 1].bytes, 64);
+
+        apply_path(indices_4700000[k],
+                   res,
+                   full_element,
+                   witness_arr, // does not include root and leaf
+                   proof_length);
+
+        assert(0==memcmp( res, expected_root, 16));
     }
 
-    uint8_t full_element[128];
-    memcpy(full_element, full_nodes_arr[0].bytes, 64);
-    memcpy(full_element + 64, full_nodes_arr[1].bytes, 64);
-
-    apply_path(5598412,
-               res,
-               full_element,
-               proof, // does not include root and leaf
-               25);
-
-     printf("got merkle root:\n");
-     printBytes(res, 16);
-     printf("should be equal:\n");
-     printf("3cc2c17108326ec9541926506072852f\n");
-    //////////////////////////////
 
 
     ethash_h256_t header_hash;
@@ -314,6 +331,8 @@ void test_ethash(std::string *dag_nodes,
     cout << "RESULT: " << hexStr(r.result.b, 32) << endl;
     cout << "MIXHASH: " << hexStr(r.mix_hash.b, 32) << endl;
 }
+
+
 
 int main(int argc, char **argv) {
     //test_ethash(dag_nodes_0, 0x6d61f75f8e1ffecf, 0, "3c311878b188920ac1b95f96c7a18f81d08f1df1cb170d46140e76631f011172");
