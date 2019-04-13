@@ -2,7 +2,7 @@
 
 /* difference from tool output:
 	-using 64B elements and not 32B.
-	-each 32 bytes chink is internally is reversed
+	-each 32 bytes chunk is internally reversed
 */
 std::string dag_nodes_4700000[128] = {
 "6aee5956c42387e671f69896e01b1c58b444aa2469f71aa5e79fdf7129bad3f095e3d07cb14c3061949498c8095504b4a33d1113981d58ac8a341c214e0007f4",

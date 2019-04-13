@@ -124,21 +124,6 @@ sha3/fast:
 .PHONY : sha3/fast
 
 # target to build an object file
-CommandParser.o:
-	$(MAKE) -f CMakeFiles/sha3.dir/build.make CMakeFiles/sha3.dir/CommandParser.o
-.PHONY : CommandParser.o
-
-# target to preprocess a source file
-CommandParser.i:
-	$(MAKE) -f CMakeFiles/sha3.dir/build.make CMakeFiles/sha3.dir/CommandParser.i
-.PHONY : CommandParser.i
-
-# target to generate assembly for a file
-CommandParser.s:
-	$(MAKE) -f CMakeFiles/sha3.dir/build.make CMakeFiles/sha3.dir/CommandParser.s
-.PHONY : CommandParser.s
-
-# target to build an object file
 HashFunction.o:
 	$(MAKE) -f CMakeFiles/sha3.dir/build.make CMakeFiles/sha3.dir/HashFunction.o
 .PHONY : HashFunction.o
@@ -192,9 +177,6 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... sha3"
-	@echo "... CommandParser.o"
-	@echo "... CommandParser.i"
-	@echo "... CommandParser.s"
 	@echo "... HashFunction.o"
 	@echo "... HashFunction.i"
 	@echo "... HashFunction.s"
