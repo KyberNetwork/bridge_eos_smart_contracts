@@ -1,21 +1,30 @@
-#include <string.h>
+#define EOSIO
+#ifdef EOSIO
+#include <eosiolib/eosio.hpp>
+#include <eosiolib/print.hpp>
+typedef unsigned int uint;
+#else
 #include <iostream>
+using std::cout;
+#endif
+
+#include <string.h>
 #include <vector>
 #include <assert.h>
 #include <iomanip>
 
 #include "data_sizes.h"
-#include "sha3/Keccak.h"
-#include "sha3/Keccak.cpp" //TODO: remove when organizing includes.
+//#include "sha3/Keccak.h"
+#include "sha3/Keccak.hpp" //TODO: remove when organizing includes.
 
-#include "input/input_block_4700000.cpp"
-#include "input/input_block_4699999.cpp"
-#include "input/input_block_5.cpp"
-#include "input/input_block_0.cpp"
-#include "input/proofs_block_4700000.cpp"
+#include "input/input_block_4700000.hpp"
+#include "input/input_block_4699999.hpp"
+#include "input/input_block_5.hpp"
+#include "input/input_block_0.hpp"
+#include "input/proofs_block_4700000.hpp"
 
 using std::endl;
-using std::cout;
+
 
 #define ETHASH_REVISION 23
 #define ETHASH_DATASET_BYTES_INIT 1073741824U // 2**30
@@ -44,8 +53,26 @@ using std::cout;
 #define fix_endian_arr32(arr_, size_)
 #define fix_endian_arr64(arr_, size_)
 
+
+
+
+
+///////////////
+#ifdef EOSIO
+using namespace eosio;
+CONTRACT Bridge : public contract {
+
+    public:
+        using contract::contract;
+
+        ACTION main();
+    private:
+};
+#endif
+
 /////////////// helper functions //////////////////
 // FOR DEBUG PURPOSES ONLY
+#ifndef EOSIO
 std::string hexStr(uint8_t * data, int len)
 {
     std::stringstream ss;
@@ -54,6 +81,7 @@ std::string hexStr(uint8_t * data, int len)
         ss << std::setw(2) << std::setfill('0') << (int)data[i];
     return ss.str();
 }
+#endif
 
 static std::vector<unsigned char> HexToBytes(const std::string& hex) {
         std::vector<unsigned char> bytes;
@@ -72,12 +100,15 @@ void HexToArr(const std::string& hex, uint8_t *arr) {
     std::copy(bytes.begin(), bytes.end(), arr);
 }
 
+#ifndef EOSIO
 void printBytes(uint8_t arr[], uint size) {
     for (int i = 0; i < size; i++) {
         printf("%02x", arr[i]);
     }
     printf("\n");
 }
+#endif
+
 ///////////////////////////////////////////////
 
 #define FNV_PRIME 0x01000193
@@ -316,15 +347,22 @@ void test_hashimoto(std::string *dag_nodes,
     ethash_return_value_t r;
     bool ret = hashimoto(&r, full_nodes_arr, header_hash, nonce, block_num, witnesses, proof_length, expected_root);
     if (!ret) {
+#ifndef EOSIO
         cout << "ETHASH HASHING FAILED" << endl;
         exit(3);
+#endif
     }
-
+#ifndef EOSIO
     cout << "RESULT: " << hexStr(r.result.b, 32) << endl;
     cout << "MIXHASH: " << hexStr(r.mix_hash.b, 32) << endl;
+#endif
 }
 
-int main(int argc, char **argv) {
+#ifdef EOSIO
+ACTION Bridge::main() {
+#else
+int main() {
+#endif
     //test_hashimoto(dag_nodes_0, 0x6d61f75f8e1ffecf, 0, "3c311878b188920ac1b95f96c7a18f81d08f1df1cb170d46140e76631f011172");
     test_hashimoto(dag_nodes_4700000,
                    9615896863360164237,
@@ -336,5 +374,20 @@ int main(int argc, char **argv) {
     //test_hashimoto(dag_nodes_4699999, 2130853672440268436, 4699999,"9bb20d3ef23a6b3cf2665e9779cf94c2de8b5d781c81cc455a1e3afdfd3aa954");
     //test_hashimoto(dag_nodes_5, 0x0cf446597e767586, 5, "8aa692f0a7bf0444c8e18f85d59f73f20c15e9c314dea0d3ff423b8043625a68");
 
-    return 0;
+    return;
 }
+
+#ifdef EOSIO
+extern "C" {
+
+    void apply(uint64_t receiver, uint64_t code, uint64_t action) {
+
+        if (code == receiver){
+            switch( action ) {
+                EOSIO_DISPATCH_HELPER( Bridge, (main))
+            }
+        }
+        eosio_exit(0);
+    }
+}
+#endif

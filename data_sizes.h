@@ -46,6 +46,7 @@ extern "C" {
 //             While[! PrimeQ[i], i--];
 //             Sow[i*HashBytes]; j++]]]][[2]][[1]]
 
+//static const uint64_t dag_sizes[2] = {1073739904U, 1082130304U};
 
 static const uint64_t dag_sizes[2048] = {
 	1073739904U, 1082130304U, 1090514816U, 1098906752U, 1107293056U,
