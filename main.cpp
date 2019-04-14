@@ -1,22 +1,18 @@
-#include <stdint.h>
-#include <stdbool.h>
 #include <string.h>
-#include <stddef.h>
 #include <iostream>
 #include <vector>
 #include <assert.h>
-#include <sstream>
 #include <iomanip>
 
 #include "data_sizes.h"
-#include "fnv.h"
-#include <SHA3/Keccak.h>
+#include "sha3/Keccak.h"
+#include "sha3/Keccak.cpp" //TODO: remove when organizing includes.
 
-#include "input_block_4700000.cpp"
-#include "input_block_4699999.cpp"
-#include "input_block_5.cpp"
-#include "input_block_0.cpp"
-#include "proofs_block_4700000.cpp"
+#include "input/input_block_4700000.cpp"
+#include "input/input_block_4699999.cpp"
+#include "input/input_block_5.cpp"
+#include "input/input_block_0.cpp"
+#include "input/proofs_block_4700000.cpp"
 
 using std::endl;
 using std::cout;
@@ -84,6 +80,11 @@ void printBytes(uint8_t arr[], uint size) {
 }
 ///////////////////////////////////////////////
 
+#define FNV_PRIME 0x01000193
+static inline uint32_t fnv_hash(uint32_t const x, uint32_t const y)
+{
+    return x * FNV_PRIME ^ y;
+}
 
 uint8_t* keccak256(struct ethash_h256 const* ret, uint8_t* input, uint input_size) {
     keccakState *st = keccakCreate(256);

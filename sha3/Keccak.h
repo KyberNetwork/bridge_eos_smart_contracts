@@ -1,7 +1,5 @@
 #pragma once
 
-#include "stdafx.h"
-
 // State structure
 struct keccakState
 {
