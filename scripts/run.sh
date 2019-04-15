@@ -10,5 +10,6 @@ PUBLIC_KEY=EOS5CYr5DvRPZvfpsUGrQ2SnHeywQn66iSbKKXn4JDTbFFr36TRTX
 EOSIO_DEV_KEY=EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV
 
 cleos create account eosio bridge $PUBLIC_KEY
-cleos set contract bridge . main.wasm --abi main.abi -p bridge@active
-cleos push action reserve main '[]' -p bridge@active
+cleos set contract bridge . Bridge.wasm --abi Bridge.abi -p bridge@active
+cleos push action bridge start '[]' -p bridge@active
+cleos push action bridge start '[]' -p bridge@active

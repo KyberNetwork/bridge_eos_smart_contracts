@@ -5,22 +5,24 @@
 typedef unsigned int uint;
 #else
 #include <iostream>
+#include <sstream>
 using std::cout;
+#include <iomanip>
 #endif
 
 #include <string.h>
 #include <vector>
 #include <assert.h>
-#include <iomanip>
+
 
 #include "data_sizes.h"
 //#include "sha3/Keccak.h"
 #include "sha3/Keccak.hpp" //TODO: remove when organizing includes.
 
 #include "input/input_block_4700000.hpp"
-#include "input/input_block_4699999.hpp"
-#include "input/input_block_5.hpp"
-#include "input/input_block_0.hpp"
+//#include "input/input_block_4699999.hpp"
+//#include "input/input_block_5.hpp"
+//#include "input/input_block_0.hpp"
 #include "input/proofs_block_4700000.hpp"
 
 using std::endl;
@@ -54,6 +56,16 @@ using std::endl;
 #define fix_endian_arr64(arr_, size_)
 
 
+struct test_info_struct {
+    std::string dag_nodes[128];
+    uint64_t nonce;
+    uint64_t block_num;
+    std::string header_hash_st;
+    uint proof_length;
+    std::string proofs[2][MAX_PROOF_DEPTH];
+    std::string expected_merkle_root;
+};
+
 
 
 
@@ -65,7 +77,7 @@ CONTRACT Bridge : public contract {
     public:
         using contract::contract;
 
-        ACTION main();
+        ACTION start();
     private:
 };
 #endif
@@ -91,13 +103,20 @@ static std::vector<unsigned char> HexToBytes(const std::string& hex) {
                 unsigned char byte = (unsigned char) strtol(byteString.c_str(), NULL, 16);
                 bytes.push_back(byte);
         }
-
         return bytes;
 }
 
 void HexToArr(const std::string& hex, uint8_t *arr) {
     std::vector<unsigned char> bytes = HexToBytes(hex);
     std::copy(bytes.begin(), bytes.end(), arr);
+}
+
+void HexToArr2(const std::string& hex, uint8_t *arr) {
+    for (unsigned int i = 0; i < hex.length(); i += 2) {
+            std::string byteString = hex.substr(i, 2);
+            unsigned char byte = (unsigned char) strtol(byteString.c_str(), NULL, 16);
+            arr[i] = byte;
+    }
 }
 
 #ifndef EOSIO
@@ -154,6 +173,9 @@ typedef union node {
     uint64_t double_words[NODE_WORDS / 2];
 } node;
 
+typedef struct proof_struct {
+    uint8_t leaves[MAX_PROOF_DEPTH][16];
+} proof;
 
 void reverseBytes(uint8_t *ret, uint8_t *data, uint size) {
     for( int i = 0; i < size; i++ ) {
@@ -245,7 +267,7 @@ static bool hashimoto(
     ethash_h256_t const header_hash,
     uint64_t const nonce,
     uint64_t block_num,
-    uint8_t witnesses[][MAX_PROOF_DEPTH][16],
+    proof witnesses[],
     uint proof_length,
     uint8_t *expected_root
 )
@@ -258,14 +280,19 @@ static bool hashimoto(
     // pack hash and nonce together into first 40 bytes of s_mix
     assert(sizeof(node) * 8 == 512);
     node s_mix[MIX_NODES + 1];
+
     memcpy(s_mix[0].bytes, &header_hash, 32);
     fix_endian64(s_mix[0].double_words[4], nonce);
 
     // compute sha3-512 hash and replicate across mix
+    print("s_mix->bytes: ");
+    for (int i = 0; i < 64; i++){
+        print(s_mix->bytes[i]);
+    }
+    return true;
+
     keccak512(s_mix->bytes, s_mix->bytes, 40);
-
     fix_endian_arr32(s_mix[0].words, 16);
-
     node* const mix = s_mix + 1;
     for (uint32_t w = 0; w != MIX_WORDS; ++w) {
         mix->words[w] = s_mix[0].words[w % NODE_WORDS];
@@ -284,7 +311,7 @@ static bool hashimoto(
             memcpy(full_element, full_nodes[i*2].bytes, 64);
             memcpy(full_element + 64, full_nodes[i*2 + 1].bytes, 64);
 
-            apply_path(index, res, full_element, witnesses[i], proof_length);
+            apply_path(index, res, full_element, witnesses[i].leaves, proof_length);
             assert(0==memcmp( res, expected_root, 16));
         }
 
@@ -315,7 +342,7 @@ static bool hashimoto(
     return true;
 }
 
-
+/*
 void test_hashimoto(std::string *dag_nodes,
                  uint64_t nonce,
                  uint64_t block_num,
@@ -323,29 +350,39 @@ void test_hashimoto(std::string *dag_nodes,
                  uint proof_length, //PROOF_LENGTH_4700000
                  std::string proofs[][MAX_PROOF_DEPTH], //proofs_4700000
                  std::string expected_merkle_root //expected_merkle_root_4700000
-) {
+*/
+void test_hashimoto(struct test_info_struct* test_info) {
 
-    node full_nodes_arr[128];
+    std::vector<unsigned char> bytes;
+
+    node* full_nodes_arr = new node[128];
     for(int i = 0; i < 128; i++) {
-         HexToArr(dag_nodes[i], full_nodes_arr[i].bytes);
+        HexToArr2(test_info->dag_nodes[i], full_nodes_arr[i].bytes);
     }
 
-    uint8_t witnesses[64][MAX_PROOF_DEPTH][16];
+    proof *witnesses = new proof[64];
     for(int i = 0; i < 64; i++) {
         if(i>=2) break; //TODO: remove check once we figure out how to load 64 proofs
-        for(int m = 0; m < proof_length; m++) {
-             HexToArr(proofs[i][m], witnesses[i][m]);
+        for(int m = 0; m < test_info->proof_length; m++) {
+            HexToArr2(test_info->proofs[i][m], (witnesses[i]).leaves[m]);
         }
     }
 
     uint8_t expected_root[16];
-    HexToArr(expected_merkle_root, expected_root);
+    HexToArr2(test_info->expected_merkle_root, expected_root);
 
     ethash_h256_t header_hash;
-    HexToArr(header_hash_st, header_hash.b);
+    HexToArr(test_info->header_hash_st, header_hash.b);
 
     ethash_return_value_t r;
-    bool ret = hashimoto(&r, full_nodes_arr, header_hash, nonce, block_num, witnesses, proof_length, expected_root);
+    bool ret = hashimoto(&r,
+                         full_nodes_arr,
+                         header_hash,
+                         test_info->nonce,
+                         test_info->block_num,
+                         witnesses,
+                         test_info->proof_length,
+                         expected_root);
     if (!ret) {
 #ifndef EOSIO
         cout << "ETHASH HASHING FAILED" << endl;
@@ -356,21 +393,31 @@ void test_hashimoto(std::string *dag_nodes,
     cout << "RESULT: " << hexStr(r.result.b, 32) << endl;
     cout << "MIXHASH: " << hexStr(r.mix_hash.b, 32) << endl;
 #endif
+
 }
 
 #ifdef EOSIO
-ACTION Bridge::main() {
+ACTION Bridge::start() {
 #else
 int main() {
 #endif
+
+    struct test_info_struct* test_info = new struct test_info_struct;
+    memcpy(test_info->dag_nodes, dag_nodes_4700000, 128 * sizeof(node));
+    test_info->nonce = 9615896863360164237;
+    test_info->block_num = 4700000;
+    test_info->header_hash_st = "de1e91c286c6b05d827e7ac983d3fc566e6139bed9384c711625f9cf1d77749c";
+    test_info->proof_length = PROOF_LENGTH_4700000;
+    for(int i = 0; i < 25; i++ ){
+        test_info->proofs[0][i] = proofs_4700000[0][i];
+    }
+    for(int i = 0; i < 25; i++ ){
+        test_info->proofs[1][i] = proofs_4700000[1][i];
+    }
+    test_info->expected_merkle_root = expected_merkle_root_4700000;
+
     //test_hashimoto(dag_nodes_0, 0x6d61f75f8e1ffecf, 0, "3c311878b188920ac1b95f96c7a18f81d08f1df1cb170d46140e76631f011172");
-    test_hashimoto(dag_nodes_4700000,
-                   9615896863360164237,
-                   4700000,
-                   "de1e91c286c6b05d827e7ac983d3fc566e6139bed9384c711625f9cf1d77749c",
-                   PROOF_LENGTH_4700000,
-                   proofs_4700000,
-                   expected_merkle_root_4700000);
+    test_hashimoto(test_info);
     //test_hashimoto(dag_nodes_4699999, 2130853672440268436, 4699999,"9bb20d3ef23a6b3cf2665e9779cf94c2de8b5d781c81cc455a1e3afdfd3aa954");
     //test_hashimoto(dag_nodes_5, 0x0cf446597e767586, 5, "8aa692f0a7bf0444c8e18f85d59f73f20c15e9c314dea0d3ff423b8043625a68");
 
@@ -384,7 +431,7 @@ extern "C" {
 
         if (code == receiver){
             switch( action ) {
-                EOSIO_DISPATCH_HELPER( Bridge, (main))
+                EOSIO_DISPATCH_HELPER( Bridge, (start))
             }
         }
         eosio_exit(0);
