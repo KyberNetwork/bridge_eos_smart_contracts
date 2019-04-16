@@ -116,6 +116,8 @@ void keccakUpdate(const uint8_t *input, int off, unsigned int len, keccakState *
 	}
 }
 
+#include <eosiolib/print.hpp>
+using namespace eosio;
 
 // keccakDigest - called once all data has been few to the keccakUpdate functions
 //  Pads the structure (in case the input is not a multiple of the block length)

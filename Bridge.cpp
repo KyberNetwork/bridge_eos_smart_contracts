@@ -119,6 +119,14 @@ void HexToArr2(const std::string& hex, uint8_t *arr) {
     }
 }
 
+void my_memcpy16B(uint8_t *dst, uint8_t *src) {
+    uint64_t *s = (uint64_t *)src;
+    uint64_t *d = (uint64_t *)dst;
+
+    dst[0] = src[0];
+    dst[1] = src[1];
+}
+
 #ifndef EOSIO
 void printBytes(uint8_t arr[], uint size) {
     for (int i = 0; i < size; i++) {
@@ -131,7 +139,7 @@ void printBytes(uint8_t arr[], uint size) {
 ///////////////////////////////////////////////
 
 #define FNV_PRIME 0x01000193
-static inline uint32_t fnv_hash(uint32_t const x, uint32_t const y)
+uint32_t fnv_hash(uint32_t const x, uint32_t const y)
 {
     return x * FNV_PRIME ^ y;
 }
@@ -145,20 +153,27 @@ uint8_t* keccak256(struct ethash_h256 const* ret, uint8_t* input, uint input_siz
 uint8_t* keccak256(uint8_t* ret, uint8_t* input, uint input_size) {
     keccakState *st = keccakCreate(256);
     keccakUpdate((uint8_t*)input, 0, input_size, st);
-    memcpy(ret, keccakDigest(st), 32);
+    unsigned char *tmp = keccakDigest(st);
+    return tmp;
+    //memcpy(ret, keccakDigest(st), 32);
 }
 
 uint8_t* keccak512(uint8_t* ret, uint8_t* input, uint input_size) {
     keccakState *st = keccakCreate(512);
     keccakUpdate((uint8_t*)input, 0, input_size, st);
-    memcpy(ret, keccakDigest(st), 64);
+    unsigned char *tmp = keccakDigest(st);
+    return tmp;
+    //print("gere1");
+    //memcpy(ret, tmp, 64);
+    //print("gere2");
 }
 
 typedef struct ethash_h256 { uint8_t b[32]; } ethash_h256_t;
 
 uint64_t ethash_get_datasize(uint64_t const block_number)
 {
-    assert(block_number / ETHASH_EPOCH_LENGTH < 2048);
+    assert(block_number / ETHASH_EPOCH_LENGTH < 1023);
+    int index = block_number / ETHASH_EPOCH_LENGTH;
     return dag_sizes[block_number / ETHASH_EPOCH_LENGTH];
 }
 
@@ -209,8 +224,12 @@ void element_hash(uint8_t *ret /* 16B */, uint8_t *data /* 128B */ ){
   uint8_t full_hash_res[32];
 
   conventional_encoding(conventional, data);
-  keccak256(full_hash_res, conventional, 128);
-  memcpy(ret, full_hash_res + 16, 16); // last 16 bytes
+
+  unsigned char* tmp = keccak256(full_hash_res, conventional, 128);
+
+  my_memcpy16B(ret, tmp + 16); // last 16 bytes
+  //memcpy(ret, full_hash_res + 16, 16); // last 16 bytes
+
   return;
 }
 
@@ -225,11 +244,11 @@ void hash_siblings(uint8_t *ret, uint8_t *a, uint8_t *b){
     uint8_t padded_pair[64] = {0};
     uint8_t full_hash_res[32];
 
-    memcpy(padded_pair + 48, a, 16);
-    memcpy(padded_pair + 16, b, 16);
+    my_memcpy16B(padded_pair + 48, a);
+    my_memcpy16B(padded_pair + 16, b);
 
-    keccak256(full_hash_res, padded_pair, 64);
-    memcpy(ret, full_hash_res + 16, 16); // last 16 bytes
+    unsigned char* tmp = keccak256(full_hash_res, padded_pair, 64);
+    my_memcpy16B(ret, tmp + 16); // last 16 bytes
     return;
 }
 
@@ -238,27 +257,24 @@ void apply_path(uint index,
                 uint8_t *full_element, //128B
                 uint8_t proof[][16], /*does not include root and leaf */
                 uint proof_size) {
-
    uint8_t leaf[16];
    uint8_t left[16];
    uint8_t right[16];
-
    element_hash(leaf, full_element);
-
    for(int i = 0; i < proof_size; i++) {
        uint side = index & 0x1;
        if( side ) {
-           memcpy(left, leaf, 16);
-           memcpy(right, proof[i], 16);
+           my_memcpy16B(left, leaf);
+           my_memcpy16B(right, proof[i]);
        } else {
-           memcpy(right, leaf, 16);
-           memcpy(left, proof[i], 16);
+           my_memcpy16B(right, leaf);
+           my_memcpy16B(left, proof[i]);
        }
        hash_siblings(leaf, left, right);
        index = index / 2;
    }
 
-   memcpy(res, leaf, 16);
+   my_memcpy16B(res, leaf);
 }
 
 static bool hashimoto(
@@ -285,13 +301,15 @@ static bool hashimoto(
     fix_endian64(s_mix[0].double_words[4], nonce);
 
     // compute sha3-512 hash and replicate across mix
-    print("s_mix->bytes: ");
-    for (int i = 0; i < 64; i++){
-        print(s_mix->bytes[i]);
-    }
-    return true;
+    //print("s_mix->bytes: ");
+    //for (int i = 0; i < 64; i++){
+    //    print_f("," ,s_mix->bytes[i]);
+    //}
 
-    keccak512(s_mix->bytes, s_mix->bytes, 40);
+    unsigned char *tmp = keccak512(s_mix->bytes, s_mix->bytes, 40);
+    memcpy(s_mix->bytes, tmp, 64);
+
+    //return true;
     fix_endian_arr32(s_mix[0].words, 16);
     node* const mix = s_mix + 1;
     for (uint32_t w = 0; w != MIX_WORDS; ++w) {
@@ -302,19 +320,26 @@ static bool hashimoto(
     unsigned const num_full_pages = (unsigned) (full_size / page_size);
 
     for (unsigned i = 0; i != ETHASH_ACCESSES; ++i) {
-        uint32_t const index = fnv_hash(s_mix->words[0] ^ i, mix->words[i % MIX_WORDS]) % num_full_pages;
 
+        // here is the problem:
+        uint32_t const index = fnv_hash(s_mix->words[0] ^ i, mix->words[i % MIX_WORDS]) % num_full_pages;
+        ///
         if(i < 2) { //TODO: remove check once we figure out how to load 64 proofs
+            print("here5.1");
             uint8_t full_element[128];
             uint8_t res[16];
+            //uint8_t *res = new uint8_t[16];
 
             memcpy(full_element, full_nodes[i*2].bytes, 64);
             memcpy(full_element + 64, full_nodes[i*2 + 1].bytes, 64);
-
+            print("here5.2");
             apply_path(index, res, full_element, witnesses[i].leaves, proof_length);
-            assert(0==memcmp( res, expected_root, 16));
-        }
 
+            //need to return:
+            //assert(0==memcmp( res, expected_root, 16));
+            print("here5.6");
+
+        }
         for (unsigned n = 0; n != MIX_NODES; ++n) {
             node const* dag_node = &full_nodes[i*2 + n];
             for (unsigned w = 0; w != NODE_WORDS; ++w) {
@@ -322,9 +347,11 @@ static bool hashimoto(
             }
         }
     }
+    print("here6");
 
     // compress mix
     for (uint32_t w = 0; w != MIX_WORDS; w += 4) {
+        print("here6.1");
         uint32_t reduction = mix->words[w + 0];
         reduction = reduction * FNV_PRIME ^ mix->words[w + 1];
         reduction = reduction * FNV_PRIME ^ mix->words[w + 2];

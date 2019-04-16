@@ -13,3 +13,13 @@ cleos create account eosio bridge $PUBLIC_KEY
 cleos set contract bridge . Bridge.wasm --abi Bridge.abi -p bridge@active
 cleos push action bridge start '[]' -p bridge@active
 cleos push action bridge start '[]' -p bridge@active
+cleos push action bridge start '[]' -p bridge@active
+cleos push action bridge start '[]' -p bridge@active
+cleos push action bridge start '[]' -p bridge@active
+cleos push action bridge start '[]' -p bridge@active
+cleos push action bridge start '[]' -p bridge@active
+cleos push action bridge start '[]' -p bridge@active
+cleos push action bridge start '[]' -p bridge@active
+cleos push action bridge start '[]' -p bridge@active
+cleos push action bridge start '[]' -p bridge@active
+cleos push action bridge start '[]' -p bridge@active
