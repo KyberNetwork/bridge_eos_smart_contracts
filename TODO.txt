@@ -1,0 +1,13 @@
+status:
+*last working code when running natively: d6ee697f6b59b6c6f53f275a678e7399b6e5218a
+*keccak256/512 is returning an array and not memcpying to input ret array, otherwise got crashes.
+*dag_sizes array got errors on its size, decreased it from 2048 to 200 for now.
+*test_info struct had to be allocated on the heap, otherwise got error originating from lack of stack space.
+*HexToArr2 is used in several places instead of HexToArr, for simplicity.
+*proofs_4700000 array contains only 2 proofs and not 64 for now.
+*"#ifndef EOSIO" should be organized more neatly.
+
+failure:
+*currently failing on "assert(0==memcmp( res, expected_root, 16));",need to further investigate.
+*reaching limit of running time per single tx, need to profile!
+

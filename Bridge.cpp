@@ -335,8 +335,7 @@ static bool hashimoto(
             print("here5.2");
             apply_path(index, res, full_element, witnesses[i].leaves, proof_length);
 
-            //need to return:
-            //assert(0==memcmp( res, expected_root, 16));
+            assert(0==memcmp( res, expected_root, 16));
             print("here5.6");
 
         }
