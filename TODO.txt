@@ -1,3 +1,7 @@
+todo next:
+*ned to split 128*64 array to 2 because of wasm limitations!
+*continue profiling, use bytes array instead of string (write script)
+
 status:
 *last working code when running natively: d6ee697f6b59b6c6f53f275a678e7399b6e5218a
 *keccak256/512 is returning an array and not memcpying to input ret array, otherwise got crashes.
@@ -10,4 +14,3 @@ status:
 failure:
 *currently failing on "assert(0==memcmp( res, expected_root, 16));",need to further investigate.
 *reaching limit of running time per single tx, need to profile!
-

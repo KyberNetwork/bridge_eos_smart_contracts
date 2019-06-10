@@ -11,15 +11,10 @@ EOSIO_DEV_KEY=EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV
 
 cleos create account eosio bridge $PUBLIC_KEY
 cleos set contract bridge . Bridge.wasm --abi Bridge.abi -p bridge@active
-cleos push action bridge start '[]' -p bridge@active
-cleos push action bridge start '[]' -p bridge@active
-cleos push action bridge start '[]' -p bridge@active
-cleos push action bridge start '[]' -p bridge@active
-cleos push action bridge start '[]' -p bridge@active
-cleos push action bridge start '[]' -p bridge@active
-cleos push action bridge start '[]' -p bridge@active
-cleos push action bridge start '[]' -p bridge@active
-cleos push action bridge start '[]' -p bridge@active
-cleos push action bridge start '[]' -p bridge@active
-cleos push action bridge start '[]' -p bridge@active
-cleos push action bridge start '[]' -p bridge@active
+#cleos push action bridge start '{"dag_nodes":[
+#0x6a, 0xee, 0x59, 0x56, 0xc4, 0x23, 0x87, 0xe6, 0x71, 0xf6, 0x98, 0x96, 0xe0, 0x1b, 0x1c, 0x58, 0xb4, 0x44, 0xaa, 0x24, 0x69, 0xf7, 0x1a, 0xa5, 0xe7, 0x9f, 0xdf, 0x71, 0x29, 0xba, 0xd3, 0xf0, 0x95, 0xe3, 0xd0, 0x7c, 0xb1, 0x4c, 0x30, 0x61, 0x94, 0x94, 0x98, 0xc8, 0x09, 0x55, 0x04, 0xb4, 0xa3, 0x3d, 0x11, 0x13, 0x98, 0x1d, 0x58, 0xac, 0x8a, 0x34, 0x1c, 0x21, 0x4e, 0x00, 0x07, 0xf4
+#]
+#}' -p bridge@active
+#cleos push action bridge start '[]' -p bridge@active
+#cleos push action bridge start '[]' -p bridge@active
+#cleos push action bridge start '[]' -p bridge@active
