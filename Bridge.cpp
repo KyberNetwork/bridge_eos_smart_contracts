@@ -1,3 +1,4 @@
+
 #define VERIFY 1
 #define EOSIO
 #ifdef EOSIO
@@ -24,7 +25,7 @@ using std::cout;
 //#include "input/input_block_4699999.hpp"
 //#include "input/input_block_5.hpp"
 //#include "input/input_block_0.hpp"
-#include "input/proofs_block_4700000.hpp"
+#include "input/proofs_block_4700000_old.hpp"
 
 using std::endl;
 
@@ -63,7 +64,7 @@ struct test_info_struct {
     uint64_t block_num;
     std::string header_hash_st;
     uint proof_length;
-    std::string proofs[2][MAX_PROOF_DEPTH];
+    std::string proofs[64][MAX_PROOF_DEPTH];
     std::string expected_merkle_root;
 };
 
@@ -558,14 +559,16 @@ int main() {
     test_info->header_hash_st = "de1e91c286c6b05d827e7ac983d3fc566e6139bed9384c711625f9cf1d77749c";
     test_info->proof_length = PROOF_LENGTH_4700000;
 
+
     //return; 1426 ms
-    for(int i = 0; i < 25; i++ ){
-        test_info->proofs[0][i] = proofs_4700000[0][i];
+    for(int k = 0; k < 3; k++){
+        for(int i = 0; i < 25; i++ ){
+            test_info->proofs[k][i] = proofs_4700000[k][i];
+        }
     }
-    //return; 1940 ms
-    for(int i = 0; i < 25; i++ ){
-        test_info->proofs[1][i] = proofs_4700000[1][i];
-    }
+    return; //tmp
+
+
     test_info->expected_merkle_root = expected_merkle_root_4700000;
 
     //return; 1777 ms
