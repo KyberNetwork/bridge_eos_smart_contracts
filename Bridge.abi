@@ -1,14 +1,23 @@
 {
-    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT ",
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Thu Jun 13 00:32:56 2019",
     "version": "eosio::abi/1.1",
-    "types": [],
     "structs": [
         {
             "name": "start",
             "base": "",
-            "fields": []
+            "fields": [
+                {
+                    "name": "dag_vec",
+                    "type": "uint8[]"
+                },
+                {
+                    "name": "proof_vec",
+                    "type": "uint8[]"
+                }
+            ]
         }
     ],
+    "types": [],
     "actions": [
         {
             "name": "start",
@@ -18,5 +27,6 @@
     ],
     "tables": [],
     "ricardian_clauses": [],
-    "variants": []
+    "variants": [],
+    "abi_extensions": []
 }

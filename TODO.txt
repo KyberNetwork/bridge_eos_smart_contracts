@@ -1,16 +1,12 @@
-todo next:
-*ned to split 128*64 array to 2 because of wasm limitations!
-*continue profiling, use bytes array instead of string (write script)
-
 status:
-*last working code when running natively: d6ee697f6b59b6c6f53f275a678e7399b6e5218a
+*functionality of ethash verification and merkle proofs works as eosio contract.
+*aligned to following commit in ethashproof tool: a137ac2db276aa36f37e37036b0bbe5e0e12b703
+*last supported code when running natively on x86: d6ee697f6b59b6c6f53f275a678e7399b6e5218a
+
+caveats:
+*using only 3 proofs since getting transaction too long error.
+*further limited to only 30 proofs because of "/usr/local/bin/cleos: Argument list too long" error
 *keccak256/512 is returning an array and not memcpying to input ret array, otherwise got crashes.
 *dag_sizes array got errors on its size, decreased it from 2048 to 200 for now.
 *test_info struct had to be allocated on the heap, otherwise got error originating from lack of stack space.
-*HexToArr2 is used in several places instead of HexToArr, for simplicity.
-*proofs_4700000 array contains only 2 proofs and not 64 for now.
-*"#ifndef EOSIO" should be organized more neatly.
 
-failure:
-*currently failing on "assert(0==memcmp( res, expected_root, 16));",need to further investigate.
-*reaching limit of running time per single tx, need to profile!
