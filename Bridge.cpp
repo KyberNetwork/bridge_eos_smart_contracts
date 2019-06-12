@@ -79,7 +79,8 @@ CONTRACT Bridge : public contract {
     public:
         using contract::contract;
 
-        ACTION start(const std::vector<unsigned char>& dag_vec);
+        ACTION start(const std::vector<unsigned char>& dag_vec,
+                     const std::vector<unsigned char>& proof_vec);
     private:
 };
 #endif
@@ -385,7 +386,7 @@ static bool hashimoto(
         */
 
         ///
-        if(i < 2 && VERIFY) { //TODO: remove check once we figure out how to load 64 proofs
+        if(i < 3 && VERIFY) { //TODO: remove check once we figure out how to load 64 proofs
             uint8_t full_element[128];
             uint8_t res[16];
             //uint8_t *res = new uint8_t[16];
@@ -484,7 +485,9 @@ void test_hashimoto(std::string *dag_nodes,
 */
 
 //#include "scripts/try.h"
-void test_hashimoto(struct test_info_struct* test_info, const std::vector<unsigned char>& dag_vec) {
+void test_hashimoto(struct test_info_struct* test_info,
+                    const std::vector<unsigned char>& dag_vec,
+                    const std::vector<unsigned char>& proof_vec) {
 
     std::vector<unsigned char> bytes;
 
@@ -506,10 +509,14 @@ void test_hashimoto(struct test_info_struct* test_info, const std::vector<unsign
 
     proof *witnesses = new proof[64];
     for(int i = 0; i < 64; i++) {
-        if(i>=2) break; //TODO: remove check once we figure out how to load 64 proofs
         for(int m = 0; m < test_info->proof_length; m++) {
+            for (int k = 0; k < 16; k ++){
+                witnesses[i].leaves[m][k] =
+                    //proof_vec[(i * 64 + m) * test_info->proof_length + k];
+                    proof_vec[i * test_info->proof_length * 16 + m *16 + k];
+            }
             //HexToArr2(test_info->proofs[i][m], (witnesses[i]).leaves[m]);
-            HexToArr(test_info->proofs[i][m], (witnesses[i]).leaves[m]);
+            //HexToArr(test_info->proofs[i][m], (witnesses[i]).leaves[m]);
         }
     }
 
@@ -543,7 +550,8 @@ void test_hashimoto(struct test_info_struct* test_info, const std::vector<unsign
 }
 
 #ifdef EOSIO
-ACTION Bridge::start(const std::vector<unsigned char>& dag_vec) {
+ACTION Bridge::start(const std::vector<unsigned char>& dag_vec,
+                     const std::vector<unsigned char>& proof_vec) {
 #else
 int main() {
 #endif
@@ -561,19 +569,20 @@ int main() {
 
 
     //return; 1426 ms
+    /*
     for(int k = 0; k < 3; k++){
         for(int i = 0; i < 25; i++ ){
             test_info->proofs[k][i] = proofs_4700000[k][i];
         }
     }
-    return; //tmp
+    */
 
 
     test_info->expected_merkle_root = expected_merkle_root_4700000;
 
     //return; 1777 ms
     //test_hashimoto(dag_nodes_0, 0x6d61f75f8e1ffecf, 0, "3c311878b188920ac1b95f96c7a18f81d08f1df1cb170d46140e76631f011172");
-    test_hashimoto(test_info, dag_vec);
+    test_hashimoto(test_info, dag_vec, proof_vec);
     //test_hashimoto(dag_nodes_4699999, 2130853672440268436, 4699999,"9bb20d3ef23a6b3cf2665e9779cf94c2de8b5d781c81cc455a1e3afdfd3aa954");
     //test_hashimoto(dag_nodes_5, 0x0cf446597e767586, 5, "8aa692f0a7bf0444c8e18f85d59f73f20c15e9c314dea0d3ff423b8043625a68");
 
