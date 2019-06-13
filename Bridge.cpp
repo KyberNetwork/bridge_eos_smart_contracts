@@ -1,3 +1,4 @@
+
 #define VERIFY true
 
 #include <eosiolib/eosio.hpp>
@@ -9,7 +10,7 @@ typedef unsigned int uint;
 #include <assert.h>
 
 #include "data_sizes.h"
-#include "sha3/Keccak.hpp" //TODO: remove when organizing includes.
+#include "sha3/sha3.hpp"
 
 using std::endl;
 
@@ -84,19 +85,27 @@ uint32_t fnv_hash(uint32_t const x, uint32_t const y)
     return x * FNV_PRIME ^ y;
 }
 
-uint8_t* keccak256(uint8_t* ret, uint8_t* input, uint input_size) {
-    keccakState *st = keccakCreate(256);
-    keccakUpdate((uint8_t*)input, 0, input_size, st);
-    unsigned char *tmp = keccakDigest(st);
-    return tmp;
-    //memcpy(ret, keccakDigest(st), 32);
+void keccak256(uint8_t* ret, uint8_t* input, uint input_size) {
+    sha3_ctx shactx;
+    rhash_keccak_256_init(&shactx);
+    rhash_keccak_update(&shactx, input, input_size);
+    rhash_keccak_final(&shactx, ret);
+
 }
 
-uint8_t* keccak512(uint8_t* ret, uint8_t* input, uint input_size) {
+void keccak512(uint8_t* ret, uint8_t* input, uint input_size) {
+
+    /*
     keccakState *st = keccakCreate(512);
     keccakUpdate((uint8_t*)input, 0, input_size, st);
     unsigned char *tmp = keccakDigest(st);
     return tmp;
+    */
+
+    sha3_ctx shactx;
+    rhash_keccak_512_init(&shactx);
+    rhash_keccak_update(&shactx, input, input_size);
+    rhash_keccak_final(&shactx, ret);
 }
 
 typedef struct ethash_h256 { uint8_t b[32]; } ethash_h256_t;
@@ -156,7 +165,8 @@ void element_hash(uint8_t *ret /* 16B */, uint8_t *data /* 128B */ ){
 
   conventional_encoding(conventional, data);
 
-  unsigned char* tmp = keccak256(full_hash_res, conventional, 128);
+  unsigned char tmp[32] = {0};
+  keccak256(tmp, conventional, 128);
 
   memcpy(ret, tmp + 16, 16); // last 16 bytes
   return;
@@ -171,12 +181,13 @@ function hash(a, b) => 16bytes {
 */
 void hash_siblings(uint8_t *ret, uint8_t *a, uint8_t *b){
     uint8_t padded_pair[64] = {0};
-    uint8_t full_hash_res[32];
+
 
     memcpy(padded_pair + 48, a, 16);
     memcpy(padded_pair + 16, b, 16);
 
-    unsigned char* tmp = keccak256(full_hash_res, padded_pair, 64);
+    unsigned char tmp[32] = {0};
+    keccak256(tmp, padded_pair, 64);
     memcpy(ret, tmp + 16, 16); // last 16 bytes
     return;
 }
@@ -228,12 +239,18 @@ static bool hashimoto(
     assert(sizeof(node) * 8 == 512);
     node s_mix[MIX_NODES + 1];
 
+    memset(s_mix[0].bytes, 0, 64);
+    memset(s_mix[1].bytes, 0, 64);
+    memset(s_mix[2].bytes, 0, 64);
+
     memcpy(s_mix[0].bytes, &header_hash, 32);
     fix_endian64(s_mix[0].double_words[4], nonce);
 
     // compute sha3-512 hash and replicate across mix
-    unsigned char *tmp = keccak512(s_mix->bytes, s_mix->bytes, 40);
-    memcpy(s_mix->bytes, tmp, 64);
+
+    unsigned char res[64] = {0};
+    keccak512(res, s_mix->bytes, 40);
+    memcpy(s_mix->bytes, res, 64);
 
     fix_endian_arr32(s_mix[0].words, 16);
     node* const mix = s_mix + 1;
@@ -248,7 +265,7 @@ static bool hashimoto(
 
         uint32_t const index = fnv_hash(s_mix->words[0] ^ i, mix->words[i % MIX_WORDS]) % num_full_pages;
 
-        if(i < 5 && VERIFY) { //TODO: remove check once we figure out how to load 64 proofs
+        if(i < 12 && VERIFY) { //TODO: remove check once we figure out how to load 64 proofs
 
             uint8_t full_element[128];
             uint8_t res[16];
@@ -256,8 +273,6 @@ static bool hashimoto(
             memcpy(full_element, full_nodes[i*2].bytes, 64);
             memcpy(full_element + 64, full_nodes[i*2 + 1].bytes, 64);
             apply_path(index, res, full_element, witnesses[i].leaves, proof_length);
-
-            //print(uint(res[0]));
 
             assert(0==memcmp(res,expected_root,16));
 
@@ -285,9 +300,10 @@ static bool hashimoto(
 
     // final Keccak hash
     //keccak256(&ret->result, s_mix->bytes, 64 + 32); // Keccak-256(s + compressed_mix)
-    unsigned char* tmp2 = keccak256(&ret->result.b[0], s_mix->bytes, 64 + 32);
-    memcpy(&ret->result.b[0], tmp2, 16); // first 16 bytes
-    memcpy(&ret->result.b[0] + 16, tmp2 + 16, 16); // last 16 bytes
+    unsigned char tmp[32] = {0};
+    keccak256(tmp, s_mix->bytes, 64 + 32);
+    memcpy(&ret->result.b[0], tmp, 16); // first 16 bytes
+    memcpy(&ret->result.b[0] + 16, tmp + 16, 16); // last 16 bytes
 
     // print result
     print("\n");
