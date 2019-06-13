@@ -94,14 +94,6 @@ void keccak256(uint8_t* ret, uint8_t* input, uint input_size) {
 }
 
 void keccak512(uint8_t* ret, uint8_t* input, uint input_size) {
-
-    /*
-    keccakState *st = keccakCreate(512);
-    keccakUpdate((uint8_t*)input, 0, input_size, st);
-    unsigned char *tmp = keccakDigest(st);
-    return tmp;
-    */
-
     sha3_ctx shactx;
     rhash_keccak_512_init(&shactx);
     rhash_keccak_update(&shactx, input, input_size);
@@ -161,11 +153,9 @@ void conventional_encoding(uint8_t *ret, uint8_t *data) {
  */
 void element_hash(uint8_t *ret /* 16B */, uint8_t *data /* 128B */ ){
   uint8_t conventional[128];
-  uint8_t full_hash_res[32];
-
   conventional_encoding(conventional, data);
 
-  unsigned char tmp[32] = {0};
+  unsigned char tmp[32];
   keccak256(tmp, conventional, 128);
 
   memcpy(ret, tmp + 16, 16); // last 16 bytes
@@ -182,11 +172,10 @@ function hash(a, b) => 16bytes {
 void hash_siblings(uint8_t *ret, uint8_t *a, uint8_t *b){
     uint8_t padded_pair[64] = {0};
 
-
     memcpy(padded_pair + 48, a, 16);
     memcpy(padded_pair + 16, b, 16);
 
-    unsigned char tmp[32] = {0};
+    unsigned char tmp[32];
     keccak256(tmp, padded_pair, 64);
     memcpy(ret, tmp + 16, 16); // last 16 bytes
     return;
@@ -197,26 +186,24 @@ void apply_path(uint index,
                 uint8_t *full_element, //128B
                 uint8_t proof[][16], /* does not include root and leaf */
                 uint proof_size) {
-   uint8_t leaf[16];
-   uint8_t left[16];
-   uint8_t right[16];
+   uint8_t *leaf = res;
+   uint8_t *left;
+   uint8_t *right;
 
    element_hash(leaf, full_element);
 
    for(int i = 0; i < proof_size; i++) {
        uint side = index & 0x1;
        if( side ) {
-           //// can do with pointers?
-           memcpy(left, leaf, 16);
-           memcpy(right, proof[i], 16);
+           left = leaf;
+           right = proof[i];
        } else {
-           memcpy(right, leaf, 16);
-           memcpy(left, proof[i], 16);
+           right = leaf;
+           left = proof[i];
        }
        hash_siblings(leaf, left, right);
        index = index / 2;
    }
-   memcpy(res, leaf, 16);
 }
 
 static bool hashimoto(
@@ -266,14 +253,9 @@ static bool hashimoto(
         uint32_t const index = fnv_hash(s_mix->words[0] ^ i, mix->words[i % MIX_WORDS]) % num_full_pages;
 
         if(i < 12 && VERIFY) { //TODO: remove check once we figure out how to load 64 proofs
-
-            uint8_t full_element[128];
             uint8_t res[16];
 
-            memcpy(full_element, full_nodes[i*2].bytes, 64);
-            memcpy(full_element + 64, full_nodes[i*2 + 1].bytes, 64);
-            apply_path(index, res, full_element, witnesses[i].leaves, proof_length);
-
+            apply_path(index, res, (uint8_t *)full_nodes[i*2].bytes, witnesses[i].leaves, proof_length);
             assert(0==memcmp(res,expected_root,16));
 
         }
