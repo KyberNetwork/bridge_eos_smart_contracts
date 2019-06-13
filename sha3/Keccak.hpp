@@ -127,8 +127,8 @@ unsigned char *keccakDigest(keccakState *state)
 	uint64_t *A = state->A;
 	keccakAddPadding(state);
 	keccakProcessBuffer(state);
-	uint64_t *tmp = new uint64_t[state->length];
-	for(unsigned int i = 0 ; i < state->length ; i+= 8) 
+	uint64_t *tmp = new uint64_t[state->length / 64];
+	for(unsigned int i = 0 ; i < state->length / 8; i+= 8)
 	{
 		tmp[i >> 3] = NativeToLittle(A[i >> 3]);
 	}

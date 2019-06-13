@@ -195,6 +195,7 @@ void apply_path(uint index,
    for(int i = 0; i < proof_size; i++) {
        uint side = index & 0x1;
        if( side ) {
+           //// can do with pointers?
            memcpy(left, leaf, 16);
            memcpy(right, proof[i], 16);
        } else {
@@ -234,7 +235,6 @@ static bool hashimoto(
     unsigned char *tmp = keccak512(s_mix->bytes, s_mix->bytes, 40);
     memcpy(s_mix->bytes, tmp, 64);
 
-    //return true;
     fix_endian_arr32(s_mix[0].words, 16);
     node* const mix = s_mix + 1;
     for (uint32_t w = 0; w != MIX_WORDS; ++w) {
@@ -248,13 +248,16 @@ static bool hashimoto(
 
         uint32_t const index = fnv_hash(s_mix->words[0] ^ i, mix->words[i % MIX_WORDS]) % num_full_pages;
 
-        if(i < 3 && VERIFY) { //TODO: remove check once we figure out how to load 64 proofs
+        if(i < 5 && VERIFY) { //TODO: remove check once we figure out how to load 64 proofs
+
             uint8_t full_element[128];
             uint8_t res[16];
 
             memcpy(full_element, full_nodes[i*2].bytes, 64);
             memcpy(full_element + 64, full_nodes[i*2 + 1].bytes, 64);
             apply_path(index, res, full_element, witnesses[i].leaves, proof_length);
+
+            //print(uint(res[0]));
 
             assert(0==memcmp(res,expected_root,16));
 
