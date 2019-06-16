@@ -127,7 +127,29 @@ uint64_t ethash_get_datasize(uint64_t const block_number)
 {
     assert(block_number / ETHASH_EPOCH_LENGTH < 1023);
     int index = block_number / ETHASH_EPOCH_LENGTH;
-    return dag_sizes[block_number / ETHASH_EPOCH_LENGTH];
+    int array_num = index / 200;
+    int index_in_array = index % 200;
+
+    uint64_t* array;
+    switch (array_num) {
+        case 0:
+            array = dag_sizes_0;
+            break;
+        case 1:
+            array = dag_sizes_1;
+            break;
+        case 2:
+            array = dag_sizes_2;
+            break;
+        case 3:
+            array = dag_sizes_3;
+            break;
+        case 4:
+            array = dag_sizes_4;
+            break;
+    }
+
+    return array[index_in_array];
 }
 
 void reverseBytes(uint8_t *ret, uint8_t *data, uint size) {
