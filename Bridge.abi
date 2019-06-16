@@ -1,11 +1,15 @@
 {
-    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Fri Jun 14 02:03:03 2019",
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Sun Jun 16 16:47:56 2019",
     "version": "eosio::abi/1.1",
     "structs": [
         {
-            "name": "start",
+            "name": "verify",
             "base": "",
             "fields": [
+                {
+                    "name": "header_rlp_vec",
+                    "type": "uint8[]"
+                },
                 {
                     "name": "dag_vec",
                     "type": "uint8[]"
@@ -20,8 +24,8 @@
     "types": [],
     "actions": [
         {
-            "name": "start",
-            "type": "start",
+            "name": "verify",
+            "type": "verify",
             "ricardian_contract": ""
         }
     ],

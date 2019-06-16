@@ -1,8 +1,9 @@
-
 #define VERIFY true
 
 #include <eosiolib/eosio.hpp>
 #include <eosiolib/print.hpp>
+#include <eosiolib/types.h>
+#include <eosiolib/crypto.h>
 typedef unsigned int uint;
 
 #include <string.h>
@@ -12,21 +13,9 @@ typedef unsigned int uint;
 #include "data_sizes.h"
 #include "sha3/sha3.hpp"
 
-using std::endl;
-
-#define ETHASH_REVISION 23
-#define ETHASH_DATASET_BYTES_INIT 1073741824U // 2**30
-#define ETHASH_DATASET_BYTES_GROWTH 8388608U  // 2**23
-#define ETHASH_CACHE_BYTES_INIT 1073741824U // 2**24
-#define ETHASH_CACHE_BYTES_GROWTH 131072U  // 2**17
 #define ETHASH_EPOCH_LENGTH 30000U
 #define ETHASH_MIX_BYTES 128
-#define ETHASH_HASH_BYTES 64
-#define ETHASH_DATASET_PARENTS 256
-#define ETHASH_CACHE_ROUNDS 3
 #define ETHASH_ACCESSES 64
-#define ETHASH_DAG_MAGIC_NUM_SIZE 8
-#define ETHASH_DAG_MAGIC_NUM 0xFEE1DEADBADDCAFE
 
 #define NODE_WORDS (64/4)
 #define MIX_WORDS (ETHASH_MIX_BYTES/4) // 32
@@ -41,28 +30,33 @@ using std::endl;
 #define fix_endian_arr32(arr_, size_)
 #define fix_endian_arr64(arr_, size_)
 
-struct test_info_struct {
+typedef struct ethash_h256 { uint8_t b[32]; } ethash_h256_t;
+
+typedef struct ethash_return_value {
+    ethash_h256_t result;
+    ethash_h256_t mix_hash;
+} ethash_return_value_t;
+
+typedef union node {
+    uint8_t bytes[NODE_WORDS * 4];
+    uint32_t words[NODE_WORDS];
+    uint64_t double_words[NODE_WORDS / 2];
+} node;
+
+typedef struct proof_struct {
+    uint8_t leaves[MAX_PROOF_DEPTH][16];
+} proof;
+
+struct header_info_struct {
     uint64_t nonce;
     uint64_t block_num;
-    std::string header_hash_st;
+    ethash_h256_t header_hash;
     uint proof_length;
-    std::string expected_merkle_root;
+    uint8_t expected_root[16];
 };
 
-using namespace eosio;
-CONTRACT Bridge : public contract {
-
-    public:
-        using contract::contract;
-
-        ACTION start(const std::vector<unsigned char>& dag_vec,
-                     const std::vector<unsigned char>& proof_vec);
-    private:
-};
-
-/////////////// helper functions //////////////////
-// FOR DEBUG PURPOSES ONLY
-static std::vector<unsigned char> HexToBytes(const std::string& hex) {
+/* helper functions - TODO - remove in production*/
+static std::vector<unsigned char> hex_to_bytes(const std::string& hex) {
         std::vector<unsigned char> bytes;
 
         for (unsigned int i = 0; i < hex.length(); i += 2) {
@@ -73,16 +67,45 @@ static std::vector<unsigned char> HexToBytes(const std::string& hex) {
         return bytes;
 }
 
-void HexToArr(const std::string& hex, uint8_t *arr) {
-    std::vector<unsigned char> bytes = HexToBytes(hex);
+void hex_to_arr(const std::string& hex, uint8_t *arr) {
+    std::vector<unsigned char> bytes = hex_to_bytes(hex);
     std::copy(bytes.begin(), bytes.end(), arr);
 }
-///////////////////////////////////////////////
+
+void print_uint8_array(uint8_t *arr, uint size){
+    for(int j = 0; j < size; j++) {
+        const uint8_t* a = &arr[j];
+        unsigned int y = (unsigned int)a[0];
+        eosio::print(y);
+        eosio::print(",");
+    }
+    eosio::print("\n");
+}
+/* end of helper functions */
+
+using namespace eosio;
+CONTRACT Bridge : public contract {
+
+    public:
+        using contract::contract;
+
+        ACTION verify(const std::vector<unsigned char>& header_rlp_vec,
+                      const std::vector<unsigned char>& dag_vec,
+                      const std::vector<unsigned char>& proof_vec);
+
+    private:
+};
 
 #define FNV_PRIME 0x01000193
 uint32_t fnv_hash(uint32_t const x, uint32_t const y)
 {
     return x * FNV_PRIME ^ y;
+}
+
+void sha256(uint8_t* ret, uint8_t* input, uint input_size) {
+    capi_checksum256 csum; //TODO - change to get on input
+    eosio:sha256((char *)input, input_size, &csum);
+    memcpy(ret, csum.hash, 32);
 }
 
 void keccak256(uint8_t* ret, uint8_t* input, uint input_size) {
@@ -100,29 +123,12 @@ void keccak512(uint8_t* ret, uint8_t* input, uint input_size) {
     rhash_keccak_final(&shactx, ret);
 }
 
-typedef struct ethash_h256 { uint8_t b[32]; } ethash_h256_t;
-
 uint64_t ethash_get_datasize(uint64_t const block_number)
 {
     assert(block_number / ETHASH_EPOCH_LENGTH < 1023);
     int index = block_number / ETHASH_EPOCH_LENGTH;
     return dag_sizes[block_number / ETHASH_EPOCH_LENGTH];
 }
-
-typedef struct ethash_return_value {
-    ethash_h256_t result;
-    ethash_h256_t mix_hash;
-} ethash_return_value_t;
-
-typedef union node {
-    uint8_t bytes[NODE_WORDS * 4];
-    uint32_t words[NODE_WORDS];
-    uint64_t double_words[NODE_WORDS / 2];
-} node;
-
-typedef struct proof_struct {
-    uint8_t leaves[MAX_PROOF_DEPTH][16];
-} proof;
 
 void reverseBytes(uint8_t *ret, uint8_t *data, uint size) {
     for( int i = 0; i < size; i++ ) {
@@ -136,7 +142,7 @@ first = concat(reverse(a), reverse(b)) where reverse reverses the bytes
 second = concat(reverse(c), reverse(d))
 conventional encoding of abcd is concat(first, second)
 */
-void conventional_encoding(uint8_t *ret, uint8_t *data) {
+void merkle_conventional_encoding(uint8_t *ret, uint8_t *data) {
     reverseBytes(ret , data, 32);
     reverseBytes(ret + 32, data + 32, 32);
     reverseBytes(ret + 64, data + 64, 32);
@@ -151,13 +157,12 @@ void conventional_encoding(uint8_t *ret, uint8_t *data) {
           return last16Bytes(h)
     }
  */
-void element_hash(uint8_t *ret /* 16B */, uint8_t *data /* 128B */ ){
+void merkle_element_hash(uint8_t *ret /* 16B */, uint8_t *data /* 128B */ ){
   uint8_t conventional[128];
-  conventional_encoding(conventional, data);
+  merkle_conventional_encoding(conventional, data);
 
   unsigned char tmp[32];
-  keccak256(tmp, conventional, 128);
-
+  sha256(tmp, conventional, 128);
   memcpy(ret, tmp + 16, 16); // last 16 bytes
   return;
 }
@@ -169,19 +174,19 @@ function hash(a, b) => 16bytes {
   return last16Bytes(h)
 }
 */
-void hash_siblings(uint8_t *ret, uint8_t *a, uint8_t *b){
+void merkle_hash_siblings(uint8_t *ret, uint8_t *a, uint8_t *b){
     uint8_t padded_pair[64] = {0};
 
     memcpy(padded_pair + 48, a, 16);
     memcpy(padded_pair + 16, b, 16);
 
     unsigned char tmp[32];
-    keccak256(tmp, padded_pair, 64);
+    sha256(tmp, padded_pair, 64);
     memcpy(ret, tmp + 16, 16); // last 16 bytes
     return;
 }
 
-void apply_path(uint index,
+void merkle_apply_path(uint index,
                 uint8_t *res, //16B
                 uint8_t *full_element, //128B
                 uint8_t proof[][16], /* does not include root and leaf */
@@ -190,7 +195,7 @@ void apply_path(uint index,
    uint8_t *left;
    uint8_t *right;
 
-   element_hash(leaf, full_element);
+   merkle_element_hash(leaf, full_element);
 
    for(int i = 0; i < proof_size; i++) {
        uint side = index & 0x1;
@@ -201,7 +206,7 @@ void apply_path(uint index,
            right = leaf;
            left = proof[i];
        }
-       hash_siblings(leaf, left, right);
+       merkle_hash_siblings(leaf, left, right);
        index = index / 2;
    }
 }
@@ -252,12 +257,10 @@ static bool hashimoto(
 
         uint32_t const index = fnv_hash(s_mix->words[0] ^ i, mix->words[i % MIX_WORDS]) % num_full_pages;
 
-        if(i < 12 && VERIFY) { //TODO: remove check once we figure out how to load 64 proofs
+        if(i < 30 && VERIFY) { //TODO: remove check once we figure out how to load 64 proofs
             uint8_t res[16];
-
-            apply_path(index, res, (uint8_t *)full_nodes[i*2].bytes, witnesses[i].leaves, proof_length);
+            merkle_apply_path(index, res, (uint8_t *)full_nodes[i*2].bytes, witnesses[i].leaves, proof_length);
             assert(0==memcmp(res,expected_root,16));
-
         }
         for (unsigned n = 0; n != MIX_NODES; ++n) {
             node const* dag_node = &full_nodes[i*2 + n];
@@ -281,46 +284,26 @@ static bool hashimoto(
     memcpy(&ret->mix_hash, mix->bytes, 32);
 
     // final Keccak hash
-    //keccak256(&ret->result, s_mix->bytes, 64 + 32); // Keccak-256(s + compressed_mix)
     unsigned char tmp[32] = {0};
     keccak256(tmp, s_mix->bytes, 64 + 32);
     memcpy(&ret->result.b[0], tmp, 16); // first 16 bytes
     memcpy(&ret->result.b[0] + 16, tmp + 16, 16); // last 16 bytes
 
-    // print result
-    print("\n");
     print("result: ");
-    for(int j =0; j < 32; j++) {
-        const uint8_t* a = &ret->result.b[j];
-        unsigned int y = (unsigned int)a[0];
-        print(y);
-        print(",");
-    }
-    print("\n");
+    print_uint8_array(ret->result.b, 32);
 
-    // print mixed hash
     print("mixed_hash: ");
-    for(int j =0; j < 32; j++) {
-        const uint8_t* a = &ret->mix_hash.b[j];
-        unsigned int y = (unsigned int)a[0];
-        print(y);
-        print(",");
-    }
-    print("\n");
+    print_uint8_array(ret->mix_hash.b, 32);
 
     // TODO: verify answer is below difficulty
-
     return true;
 }
 
-void test_hashimoto(struct test_info_struct* test_info,
-                    const std::vector<unsigned char>& dag_vec,
-                    const std::vector<unsigned char>& proof_vec) {
-
-    std::vector<unsigned char> bytes;
+void verify_header(struct header_info_struct* header_info,
+                   const std::vector<unsigned char>& dag_vec,
+                   const std::vector<unsigned char>& proof_vec) {
 
     node* full_nodes_arr = new node[128];
-
     for(int i = 0; i < 128; i++) {
         for(int j = 0; j < 64; j++){
             full_nodes_arr[i].bytes[j] = dag_vec[i * 64 + j];
@@ -329,46 +312,54 @@ void test_hashimoto(struct test_info_struct* test_info,
 
     proof *witnesses = new proof[64];
     for(int i = 0; i < 64; i++) {
-        for(int m = 0; m < test_info->proof_length; m++) {
+        for(int m = 0; m < header_info->proof_length; m++) {
             for (int k = 0; k < 16; k ++){
                 witnesses[i].leaves[m][k] =
-                    proof_vec[i * test_info->proof_length * 16 + m *16 + k];
+                    proof_vec[i * header_info->proof_length * 16 + m *16 + k];
             }
         }
     }
 
-    uint8_t expected_root[16];
-    HexToArr(test_info->expected_merkle_root, expected_root);
-
-    ethash_h256_t header_hash;
-    HexToArr(test_info->header_hash_st, header_hash.b);
-
     ethash_return_value_t r;
     bool ret = hashimoto(&r,
                          full_nodes_arr,
-                         header_hash,
-                         test_info->nonce,
-                         test_info->block_num,
+                         header_info->header_hash,
+                         header_info->nonce,
+                         header_info->block_num,
                          witnesses,
-                         test_info->proof_length,
-                         expected_root);
+                         header_info->proof_length,
+                         header_info->expected_root);
     if (!ret) {
         // TODO: implement failure case
     }
 }
 
+void parse_header(struct header_info_struct* header_info,
+                  const std::vector<unsigned char>& header_rlp_vec) {
 
-ACTION Bridge::start(const std::vector<unsigned char>& dag_vec,
-                     const std::vector<unsigned char>& proof_vec) {
+    // TODO - this info (except proof length) should be extracted from the header.
+    header_info->nonce = 9615896863360164237;
+    header_info->block_num = 4700000;
+    hex_to_arr("de1e91c286c6b05d827e7ac983d3fc566e6139bed9384c711625f9cf1d77749c",
+             header_info->header_hash.b);
 
-    struct test_info_struct* test_info = new struct test_info_struct;
-    test_info->nonce = 9615896863360164237;
-    test_info->block_num = 4700000;
-    test_info->header_hash_st = "de1e91c286c6b05d827e7ac983d3fc566e6139bed9384c711625f9cf1d77749c";
-    test_info->proof_length = 25;
-    test_info->expected_merkle_root = "3cc2c17108326ec9541926506072852f";
+    // TODO - get proofs related data from pre-computed storage.
+    header_info->proof_length = 25;
+    hex_to_arr("d0eb4a9ff0dc08a9149b275e3a64e93d", header_info->expected_root);
+}
 
-    test_hashimoto(test_info, dag_vec, proof_vec);
+void store_header(struct header_info_struct* header_info) {
+    // TODO - implement with relevant data structure.
+}
+
+ACTION Bridge::verify(const std::vector<unsigned char>& header_rlp_vec,
+                      const std::vector<unsigned char>& dag_vec,
+                      const std::vector<unsigned char>& proof_vec) {
+
+    struct header_info_struct* header_info = new struct header_info_struct;
+    parse_header(header_info, header_rlp_vec);
+    verify_header(header_info, dag_vec, proof_vec);
+    store_header(header_info);
     return;
 }
 
@@ -378,7 +369,7 @@ extern "C" {
 
         if (code == receiver){
             switch( action ) {
-                EOSIO_DISPATCH_HELPER( Bridge, (start))
+                EOSIO_DISPATCH_HELPER( Bridge, (verify))
             }
         }
         eosio_exit(0);
