@@ -92,7 +92,8 @@ CONTRACT Bridge : public contract {
 
         ACTION verify(const std::vector<unsigned char>& header_rlp_vec,
                       const std::vector<unsigned char>& dag_vec,
-                      const std::vector<unsigned char>& proof_vec);
+                      const std::vector<unsigned char>& proof_vec,
+                      uint proof_length);
 
     private:
 };
@@ -324,7 +325,8 @@ static bool hashimoto(
 
 void verify_header(struct header_info_struct* header_info,
                    const std::vector<unsigned char>& dag_vec,
-                   const std::vector<unsigned char>& proof_vec) {
+                   const std::vector<unsigned char>& proof_vec,
+                   uint proof_length) {
 
     node* full_nodes_arr = new node[128];
     for(int i = 0; i < 128; i++) {
@@ -335,10 +337,10 @@ void verify_header(struct header_info_struct* header_info,
 
     proof *witnesses = new proof[64];
     for(int i = 0; i < 64; i++) {
-        for(int m = 0; m < header_info->proof_length; m++) {
+        for(int m = 0; m < proof_length; m++) {
             for (int k = 0; k < 16; k ++){
                 witnesses[i].leaves[m][k] =
-                    proof_vec[i * header_info->proof_length * 16 + m *16 + k];
+                    proof_vec[i * proof_length * 16 + m *16 + k];
             }
         }
     }
@@ -350,7 +352,7 @@ void verify_header(struct header_info_struct* header_info,
                          header_info->nonce,
                          header_info->block_num,
                          witnesses,
-                         header_info->proof_length,
+                         proof_length,
                          header_info->expected_root,
                          header_info->difficulty);
     if (!ret) {
@@ -397,11 +399,12 @@ void store_header(struct header_info_struct* header_info) {
 
 ACTION Bridge::verify(const std::vector<unsigned char>& header_rlp_vec,
                       const std::vector<unsigned char>& dag_vec,
-                      const std::vector<unsigned char>& proof_vec) {
+                      const std::vector<unsigned char>& proof_vec,
+                      uint proof_length) {
 
     struct header_info_struct header_info;
     parse_header(&header_info, header_rlp_vec);
-    verify_header(&header_info, dag_vec, proof_vec);
+    verify_header(&header_info, dag_vec, proof_vec, proof_length);
     store_header(&header_info);
     return;
 }

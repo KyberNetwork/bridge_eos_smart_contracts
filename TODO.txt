@@ -1,12 +1,9 @@
 status:
-*functionality of ethash verification and merkle proofs works as eosio contract.
-*aligned to following commit in ethashproof tool: a137ac2db276aa36f37e37036b0bbe5e0e12b703
+*aligned to following commit in ethashproof tool: 1ee1d4dd019b081fcd43fd169881153b258715a9
 *last supported code when running natively on x86: d6ee697f6b59b6c6f53f275a678e7399b6e5218a
 
 caveats:
-*using only 3 proofs since getting transaction too long error.
-*further limited to only 30 proofs because of "/usr/local/bin/cleos: Argument list too long" error
-*keccak256/512 is returning an array and not memcpying to input ret array, otherwise got crashes.
-*dag_sizes array got errors on its size, decreased it from 2048 to 200 for now.
-*test_info struct had to be allocated on the heap, otherwise got error originating from lack of stack space.
+*limited to only 30 proofs because of "/usr/local/bin/cleos: Argument list too long" error
+*dag_sizes array got errors on its size, decreased it from to 200*5 for now (10 years).
+
 
