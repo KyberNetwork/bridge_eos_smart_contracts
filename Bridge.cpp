@@ -8,10 +8,10 @@ typedef unsigned int uint;
 
 #include <string.h>
 #include <vector>
-#include <assert.h>
 
 #include "data_sizes.h"
 #include "sha3/sha3.hpp"
+#include "Rlp.hpp"
 
 #define ETHASH_EPOCH_LENGTH 30000U
 #define ETHASH_MIX_BYTES 128
@@ -53,6 +53,7 @@ struct header_info_struct {
     ethash_h256_t header_hash;
     uint proof_length;
     uint8_t expected_root[16];
+    uint8_t difficulty;
 };
 
 /* helper functions - TODO - remove in production*/
@@ -125,7 +126,7 @@ void keccak512(uint8_t* ret, uint8_t* input, uint input_size) {
 
 uint64_t ethash_get_datasize(uint64_t const block_number)
 {
-    assert(block_number / ETHASH_EPOCH_LENGTH < 1023);
+    eosio_assert(block_number / ETHASH_EPOCH_LENGTH < 1000, "block number too big");
     int index = block_number / ETHASH_EPOCH_LENGTH;
     int array_num = index / 200;
     int index_in_array = index % 200;
@@ -241,7 +242,8 @@ static bool hashimoto(
     uint64_t block_num,
     proof witnesses[],
     uint proof_length,
-    uint8_t *expected_root
+    uint8_t *expected_root,
+    uint64_t difficulty
 )
 {
     uint64_t full_size = ethash_get_datasize(block_num);
@@ -250,7 +252,6 @@ static bool hashimoto(
     }
 
     // pack hash and nonce together into first 40 bytes of s_mix
-    assert(sizeof(node) * 8 == 512);
     node s_mix[MIX_NODES + 1];
 
     memset(s_mix[0].bytes, 0, 64);
@@ -282,7 +283,7 @@ static bool hashimoto(
         if(i < 30 && VERIFY) { //TODO: remove check once we figure out how to load 64 proofs
             uint8_t res[16];
             merkle_apply_path(index, res, (uint8_t *)full_nodes[i*2].bytes, witnesses[i].leaves, proof_length);
-            assert(0==memcmp(res,expected_root,16));
+            eosio_assert(0 == memcmp(res,expected_root,16), "merkle veification failure");
         }
         for (unsigned n = 0; n != MIX_NODES; ++n) {
             node const* dag_node = &full_nodes[i*2 + n];
@@ -350,20 +351,40 @@ void verify_header(struct header_info_struct* header_info,
                          header_info->block_num,
                          witnesses,
                          header_info->proof_length,
-                         header_info->expected_root);
+                         header_info->expected_root,
+                         header_info->difficulty);
     if (!ret) {
         // TODO: implement failure case
     }
 }
 
+void hash_header_rlp(struct header_info_struct* header_info,
+                     const std::vector<unsigned char>& header_rlp_vec,
+                     rlp_item* items) {
+
+    int trim_len = remove_last_field_from_rlp((unsigned char *)header_rlp_vec.data(), items[14].len);
+    eosio_assert(trim_len == (header_rlp_vec.size() - 9), "wrong 1st trim length");
+
+    trim_len = remove_last_field_from_rlp((unsigned char *)header_rlp_vec.data(), items[13].len);
+    eosio_assert(trim_len == (header_rlp_vec.size() - 42), "wrong 2nd trim length");
+
+    keccak256(header_info->header_hash.b,
+              (unsigned char *)header_rlp_vec.data(),
+              trim_len);
+
+}
+
 void parse_header(struct header_info_struct* header_info,
                   const std::vector<unsigned char>& header_rlp_vec) {
 
-    // TODO - this info (except proof length) should be extracted from the header.
-    header_info->nonce = 9615896863360164237;
-    header_info->block_num = 4700000;
-    hex_to_arr("de1e91c286c6b05d827e7ac983d3fc566e6139bed9384c711625f9cf1d77749c",
-             header_info->header_hash.b);
+    rlp_item items[15];
+    decode_list((unsigned char *)header_rlp_vec.data(), items);
+
+    header_info->nonce = get_uint64(&items[NONCE_FIELD]);
+    header_info->block_num = get_uint64(&items[NUMBER_FIELD]);
+    header_info->difficulty = get_uint64(&items[DIFFICULTY_FIELD]);
+
+    hash_header_rlp(header_info, header_rlp_vec, items);
 
     // TODO - get proofs related data from pre-computed storage.
     header_info->proof_length = 25;
@@ -378,10 +399,10 @@ ACTION Bridge::verify(const std::vector<unsigned char>& header_rlp_vec,
                       const std::vector<unsigned char>& dag_vec,
                       const std::vector<unsigned char>& proof_vec) {
 
-    struct header_info_struct* header_info = new struct header_info_struct;
-    parse_header(header_info, header_rlp_vec);
-    verify_header(header_info, dag_vec, proof_vec);
-    store_header(header_info);
+    struct header_info_struct header_info;
+    parse_header(&header_info, header_rlp_vec);
+    verify_header(&header_info, dag_vec, proof_vec);
+    store_header(&header_info);
     return;
 }
 
