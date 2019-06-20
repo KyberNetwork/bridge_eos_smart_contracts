@@ -1,5 +1,5 @@
 status:
-*aligned to following commit in ethashproof tool: 1ee1d4dd019b081fcd43fd169881153b258715a9
+*aligned to following commit in ethashproof tool: cb83e452527c31ffff40ec71d3c49d8c80f123e6
 *last supported code when running natively on x86: d6ee697f6b59b6c6f53f275a678e7399b6e5218a
 
 caveats:

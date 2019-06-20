@@ -8,7 +8,7 @@
 
 PROOF_SIZE = 25
 NUM_PROOFS = 64
-MAX_PROOFS = 30 # this limitation is because of "/usr/local/bin/cleos: Argument list too long" error
+MAX_PROOFS = 15 # this limitation is because of "/usr/local/bin/cleos: Argument list too long" error
 
 # get json data
 
@@ -36,7 +36,7 @@ with open('ethhashproof_output.json') as json_file:
     counter = 0
     for elem in data['merkle_proofs']:
         stripped = elem.strip().replace('0x', '')
-        padded = stripped.rjust(16 * 2, '0')
+        padded = stripped.rjust(32 * 2, '0')
         proof_chunks.append(padded.encode("utf-8"))
         counter = counter + 1
         if counter >= (MAX_PROOFS * PROOF_SIZE):

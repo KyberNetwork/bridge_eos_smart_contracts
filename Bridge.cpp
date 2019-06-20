@@ -44,16 +44,15 @@ typedef union node {
 } node;
 
 typedef struct proof_struct {
-    uint8_t leaves[MAX_PROOF_DEPTH][16];
+    uint8_t leaves[MAX_PROOF_DEPTH][32];
 } proof;
 
 struct header_info_struct {
     uint64_t nonce;
     uint64_t block_num;
     ethash_h256_t header_hash;
-    uint proof_length;
-    uint8_t expected_root[16];
-    uint8_t difficulty;
+    uint8_t expected_root[32];
+    uint8_t *difficulty;
 };
 
 /* helper functions - TODO - remove in production*/
@@ -94,6 +93,17 @@ CONTRACT Bridge : public contract {
                       const std::vector<unsigned char>& dag_vec,
                       const std::vector<unsigned char>& proof_vec,
                       uint proof_length);
+
+        ACTION storeroots(const std::vector<uint64_t>& blcok_num_vec,
+                          const std::vector<unsigned char>& root_vec);
+
+        TABLE roots {
+            uint64_t                     block_num;
+            std::vector<unsigned char>   root;
+            uint64_t        primary_key() const { return block_num; }
+        };
+
+        typedef eosio::multi_index<"roots"_n, roots> roots_type;
 
     private:
 };
@@ -160,12 +170,6 @@ void reverseBytes(uint8_t *ret, uint8_t *data, uint size) {
     }
 }
 
-/*
-assume the element is abcd where a, b, c, d are 32 bytes word
-first = concat(reverse(a), reverse(b)) where reverse reverses the bytes
-second = concat(reverse(c), reverse(d))
-conventional encoding of abcd is concat(first, second)
-*/
 void merkle_conventional_encoding(uint8_t *ret, uint8_t *data) {
     reverseBytes(ret , data, 32);
     reverseBytes(ret + 32, data + 32, 32);
@@ -174,46 +178,27 @@ void merkle_conventional_encoding(uint8_t *ret, uint8_t *data) {
     return;
 }
 
-/*
- * Hash function for data element(elementhash) elementhash returns 16 bytes hash of the dataset element.
-    function elementhash(data) => 16bytes {
-          h = keccak256(conventional(data)) // conventional function is defined in dataset element encoding section
-          return last16Bytes(h)
-    }
- */
-void merkle_element_hash(uint8_t *ret /* 16B */, uint8_t *data /* 128B */ ){
+void merkle_element_hash(uint8_t *ret, uint8_t *data){
   uint8_t conventional[128];
   merkle_conventional_encoding(conventional, data);
-
-  unsigned char tmp[32];
-  sha256(tmp, conventional, 128);
-  memcpy(ret, tmp + 16, 16); // last 16 bytes
+  sha256(ret, conventional, 128);
   return;
 }
 
-/*
-Hash function for 2 sibling nodes (hash) hash returns 16 bytes hash of 2 consecutive elements in a working level.
-function hash(a, b) => 16bytes {
-  h = keccak256(zeropadded(a), zeropadded(b)) // where zeropadded function prepend 16 bytes of 0 to its param
-  return last16Bytes(h)
-}
-*/
 void merkle_hash_siblings(uint8_t *ret, uint8_t *a, uint8_t *b){
     uint8_t padded_pair[64] = {0};
 
-    memcpy(padded_pair + 48, a, 16);
-    memcpy(padded_pair + 16, b, 16);
+    memcpy(padded_pair + 32, a, 32);
+    memcpy(padded_pair + 0, b, 32);
 
-    unsigned char tmp[32];
-    sha256(tmp, padded_pair, 64);
-    memcpy(ret, tmp + 16, 16); // last 16 bytes
+    sha256(ret, padded_pair, 64);
     return;
 }
 
 void merkle_apply_path(uint index,
-                uint8_t *res, //16B
-                uint8_t *full_element, //128B
-                uint8_t proof[][16], /* does not include root and leaf */
+                uint8_t *res, // 32B
+                uint8_t *full_element, // 128B
+                uint8_t proof[][32], /* does not include root and leaf */
                 uint proof_size) {
    uint8_t *leaf = res;
    uint8_t *left;
@@ -244,7 +229,7 @@ static bool hashimoto(
     proof witnesses[],
     uint proof_length,
     uint8_t *expected_root,
-    uint64_t difficulty
+    uint8_t *difficulty
 )
 {
     uint64_t full_size = ethash_get_datasize(block_num);
@@ -281,10 +266,10 @@ static bool hashimoto(
 
         uint32_t const index = fnv_hash(s_mix->words[0] ^ i, mix->words[i % MIX_WORDS]) % num_full_pages;
 
-        if(i < 30 && VERIFY) { //TODO: remove check once we figure out how to load 64 proofs
-            uint8_t res[16];
+        if(i < 15 && VERIFY) { //TODO: remove check once we figure out how to load 64 proofs
+            uint8_t res[32];
             merkle_apply_path(index, res, (uint8_t *)full_nodes[i*2].bytes, witnesses[i].leaves, proof_length);
-            eosio_assert(0 == memcmp(res,expected_root,16), "merkle veification failure");
+            eosio_assert(0 == memcmp(res,expected_root,32), "merkle verification failure");
         }
         for (unsigned n = 0; n != MIX_NODES; ++n) {
             node const* dag_node = &full_nodes[i*2 + n];
@@ -338,9 +323,9 @@ void verify_header(struct header_info_struct* header_info,
     proof *witnesses = new proof[64];
     for(int i = 0; i < 64; i++) {
         for(int m = 0; m < proof_length; m++) {
-            for (int k = 0; k < 16; k ++){
+            for (int k = 0; k < 32; k ++){
                 witnesses[i].leaves[m][k] =
-                    proof_vec[i * proof_length * 16 + m *16 + k];
+                    proof_vec[i * proof_length * 32 + m * 32 + k];
             }
         }
     }
@@ -384,18 +369,30 @@ void parse_header(struct header_info_struct* header_info,
 
     header_info->nonce = get_uint64(&items[NONCE_FIELD]);
     header_info->block_num = get_uint64(&items[NUMBER_FIELD]);
-    header_info->difficulty = get_uint64(&items[DIFFICULTY_FIELD]);
+    header_info->difficulty = items[DIFFICULTY_FIELD].content;
+
+    //print("difficulty:");
+    //print_uint8_array(header_info->difficulty, items[DIFFICULTY_FIELD].len);
 
     hash_header_rlp(header_info, header_rlp_vec, items);
 
-    // TODO - get proofs related data from pre-computed storage.
-    header_info->proof_length = 25;
-    hex_to_arr("d0eb4a9ff0dc08a9149b275e3a64e93d", header_info->expected_root);
+    // TODO - get roots from pre-computed storage.
+
+    // epoch 156 - (for block 4700000)
+    hex_to_arr("5bdb1286fc8b603c44a9f5c63f0ad6260547472f5170b0762898c5c7f720b15e", header_info->expected_root);
+
+    // epoch 0 - (for block 3)
+    //hex_to_arr("a43206a1f0a5f8ce71683eb4650042f902fdc3a09e42be954404fb9ae92bee04", header_info->expected_root);
 }
 
 void store_header(struct header_info_struct* header_info) {
     // TODO - implement with relevant data structure.
 }
+
+ACTION Bridge::storeroots(const std::vector<uint64_t>& blcok_num_vec,
+                          const std::vector<unsigned char>& root_vec) {
+
+};
 
 ACTION Bridge::verify(const std::vector<unsigned char>& header_rlp_vec,
                       const std::vector<unsigned char>& dag_vec,
@@ -415,7 +412,7 @@ extern "C" {
 
         if (code == receiver){
             switch( action ) {
-                EOSIO_DISPATCH_HELPER( Bridge, (verify))
+                EOSIO_DISPATCH_HELPER( Bridge, (verify)(storeroots))
             }
         }
         eosio_exit(0);
