@@ -12,6 +12,7 @@ typedef unsigned int uint;
 #include "data_sizes.h"
 #include "sha3/sha3.hpp"
 #include "Rlp.hpp"
+#include "LongMult.hpp"
 
 #define ETHASH_EPOCH_LENGTH 30000U
 #define ETHASH_MIX_BYTES 128
@@ -53,6 +54,7 @@ struct header_info_struct {
     ethash_h256_t header_hash;
     uint8_t expected_root[32];
     uint8_t *difficulty;
+    uint difficulty_len;
 };
 
 /* helper functions - TODO - remove in production*/
@@ -229,7 +231,8 @@ static bool hashimoto(
     proof witnesses[],
     uint proof_length,
     uint8_t *expected_root,
-    uint8_t *difficulty
+    uint8_t *difficulty,
+    uint difficulty_len
 )
 {
     uint64_t full_size = ethash_get_datasize(block_num);
@@ -304,7 +307,9 @@ static bool hashimoto(
     print("mixed_hash: ");
     print_uint8_array(ret->mix_hash.b, 32);
 
-    // TODO: verify answer is below difficulty
+    //check ethash result meets the rquire difficulty
+    eosio_assert(check_pow(difficulty, difficulty_len, ret->result.b), "pow difficulty failure");
+
     return true;
 }
 
@@ -339,7 +344,8 @@ void verify_header(struct header_info_struct* header_info,
                          witnesses,
                          proof_length,
                          header_info->expected_root,
-                         header_info->difficulty);
+                         header_info->difficulty,
+                         header_info->difficulty_len);
     if (!ret) {
         // TODO: implement failure case
     }
@@ -370,6 +376,7 @@ void parse_header(struct header_info_struct* header_info,
     header_info->nonce = get_uint64(&items[NONCE_FIELD]);
     header_info->block_num = get_uint64(&items[NUMBER_FIELD]);
     header_info->difficulty = items[DIFFICULTY_FIELD].content;
+    header_info->difficulty_len = items[DIFFICULTY_FIELD].len;
 
     //print("difficulty:");
     //print_uint8_array(header_info->difficulty, items[DIFFICULTY_FIELD].len);
