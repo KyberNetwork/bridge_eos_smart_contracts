@@ -52,21 +52,21 @@ struct header_info_struct {
     uint64_t nonce;
     uint64_t block_num;
     ethash_h256_t header_hash;
-    uint8_t expected_root[32];
+    uint8_t *expected_root;
     uint8_t *difficulty;
     uint difficulty_len;
 };
 
 /* helper functions - TODO - remove in production*/
 static std::vector<unsigned char> hex_to_bytes(const std::string& hex) {
-        std::vector<unsigned char> bytes;
+    std::vector<unsigned char> bytes;
 
-        for (unsigned int i = 0; i < hex.length(); i += 2) {
-                std::string byteString = hex.substr(i, 2);
-                unsigned char byte = (unsigned char) strtol(byteString.c_str(), NULL, 16);
-                bytes.push_back(byte);
-        }
-        return bytes;
+    for (unsigned int i = 0; i < hex.length(); i += 2) {
+            std::string byteString = hex.substr(i, 2);
+            unsigned char byte = (unsigned char) strtol(byteString.c_str(), NULL, 16);
+            bytes.push_back(byte);
+    }
+    return bytes;
 }
 
 void hex_to_arr(const std::string& hex, uint8_t *arr) {
@@ -96,18 +96,20 @@ CONTRACT Bridge : public contract {
                       const std::vector<unsigned char>& proof_vec,
                       uint proof_length);
 
-        ACTION storeroots(const std::vector<uint64_t>& blcok_num_vec,
+        ACTION storeroots(const std::vector<uint64_t>& epoch_num_vec,
                           const std::vector<unsigned char>& root_vec);
 
         TABLE roots {
-            uint64_t                     block_num;
+            uint64_t                     epoch_num;
             std::vector<unsigned char>   root;
-            uint64_t        primary_key() const { return block_num; }
+            uint64_t        primary_key() const { return epoch_num; }
         };
 
         typedef eosio::multi_index<"roots"_n, roots> roots_type;
 
     private:
+        void parse_header(struct header_info_struct* header_info,
+                          const std::vector<unsigned char>& header_rlp_vec);
 };
 
 #define FNV_PRIME 0x01000193
@@ -367,9 +369,8 @@ void hash_header_rlp(struct header_info_struct* header_info,
 
 }
 
-void parse_header(struct header_info_struct* header_info,
-                  const std::vector<unsigned char>& header_rlp_vec) {
-
+void Bridge::parse_header(struct header_info_struct* header_info,
+                          const std::vector<unsigned char>& header_rlp_vec) {
     rlp_item items[15];
     decode_list((unsigned char *)header_rlp_vec.data(), items);
 
@@ -378,27 +379,34 @@ void parse_header(struct header_info_struct* header_info,
     header_info->difficulty = items[DIFFICULTY_FIELD].content;
     header_info->difficulty_len = items[DIFFICULTY_FIELD].len;
 
-    //print("difficulty:");
-    //print_uint8_array(header_info->difficulty, items[DIFFICULTY_FIELD].len);
-
     hash_header_rlp(header_info, header_rlp_vec, items);
 
-    // TODO - get roots from pre-computed storage.
-
-    // epoch 156 - (for block 4700000)
-    hex_to_arr("5bdb1286fc8b603c44a9f5c63f0ad6260547472f5170b0762898c5c7f720b15e", header_info->expected_root);
-
-    // epoch 0 - (for block 3)
-    //hex_to_arr("a43206a1f0a5f8ce71683eb4650042f902fdc3a09e42be954404fb9ae92bee04", header_info->expected_root);
+    // get pre-stored root
+    roots_type roots_inst(_self, _self.value);
+    auto root_entry = roots_inst.get(header_info->block_num / 30000U, "dag root not pre-stored");
+    header_info->expected_root = root_entry.root.data();
 }
 
 void store_header(struct header_info_struct* header_info) {
     // TODO - implement with relevant data structure.
 }
 
-ACTION Bridge::storeroots(const std::vector<uint64_t>& blcok_num_vec,
-                          const std::vector<unsigned char>& root_vec) {
+ACTION Bridge::storeroots(const std::vector<uint64_t>& epoch_num_vec,
+                          const std::vector<unsigned char>& root_vec){
 
+    eosio_assert(epoch_num_vec.size() * 32 == root_vec.size(), "block num and root vectors mismatch");
+    roots_type roots_inst(_self, _self.value);
+
+    for(uint i = 0; i < epoch_num_vec.size(); i++){
+        roots_inst.emplace(_self, [&](auto& s) {
+            s.epoch_num = epoch_num_vec[i];
+
+            // TODO: improve pushing to use memcpy or std::cpy
+            for(uint j = 0; j < 32; j++ ){
+                s.root.push_back(root_vec[i * 32 + j]);
+            }
+        });
+    }
 };
 
 ACTION Bridge::verify(const std::vector<unsigned char>& header_rlp_vec,
