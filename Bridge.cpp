@@ -394,6 +394,8 @@ void store_header(struct header_info_struct* header_info) {
 ACTION Bridge::storeroots(const std::vector<uint64_t>& epoch_num_vec,
                           const std::vector<unsigned char>& root_vec){
 
+    require_auth(_self);
+
     eosio_assert(epoch_num_vec.size() * 32 == root_vec.size(), "block num and root vectors mismatch");
     roots_type roots_inst(_self, _self.value);
 
