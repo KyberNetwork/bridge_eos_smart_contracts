@@ -8,7 +8,7 @@
 
 PROOF_SIZE = 25
 NUM_PROOFS = 64
-MAX_PROOFS = 15 # this limitation is because of "/usr/local/bin/cleos: Argument list too long" error
+MAX_PROOFS = 50 # this limitation is because of "/usr/local/bin/cleos: Argument list too long" error
 
 # get json data
 

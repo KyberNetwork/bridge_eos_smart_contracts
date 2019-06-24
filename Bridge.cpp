@@ -221,7 +221,7 @@ void merkle_apply_path(uint index,
 }
 
 static bool hashimoto(
-    node const* full_nodes,
+    const std::vector<unsigned char>& dag_vec,
     uint8_t *header_hash,
     uint64_t const nonce,
     uint64_t block_num,
@@ -232,6 +232,7 @@ static bool hashimoto(
     uint difficulty_len
 )
 {
+
     uint64_t full_size = ethash_get_datasize(block_num);
     if (full_size % MIX_WORDS != 0) {
         return false;
@@ -266,17 +267,19 @@ static bool hashimoto(
 
         uint32_t const index = fnv_hash(s_mix->words[0] ^ i, mix->words[i % MIX_WORDS]) % num_full_pages;
 
-        if(i < 15 && VERIFY) { //TODO: remove check once we figure out how to load 64 proofs
+        if(VERIFY && i < 50) { //TODO: remove check once we figure out how to load 64 proofs
             uint8_t res[MERKLE_ELEMENT_LEN];
-            merkle_apply_path(index, res, (uint8_t *)full_nodes[i*2].bytes, witnesses[i].leaves, proof_length);
+            uint8_t *current_item = (uint8_t *)(&dag_vec[i * NODE_BYTES * 2]);
+
+            merkle_apply_path(index, res, current_item, witnesses[i].leaves, proof_length);
             eosio_assert(0 == memcmp(res, expected_root, MERKLE_ELEMENT_LEN),
                          "merkle verification failure");
         }
         for (unsigned n = 0; n != MIX_NODES; ++n) {
-            node const* dag_node = &full_nodes[i*2 + n];
 
+            uint32_t *current_item_word = (uint32_t *)(&dag_vec[NODE_BYTES * (i * 2 + n)]);
             for (unsigned w = 0; w != NODE_WORDS; ++w) {
-                mix[n].words[w] = fnv_hash(mix[n].words[w], dag_node->words[w]);
+                mix[n].words[w] = fnv_hash(mix[n].words[w], current_item_word[w]);
             }
         }
     }
@@ -313,15 +316,8 @@ void verify_header(struct header_info_struct* header_info,
                    const std::vector<unsigned char>& proof_vec,
                    uint proof_length) {
 
-    /* Note: nodes and proofs are dynamically allocated,
+    /* Note: proofs are dynamically allocated,
        since wasm can not handle their size as static. */
-
-    node* full_nodes_arr = new node[ETHASH_MIX_BYTES];
-    for(int i = 0; i < ETHASH_MIX_BYTES; i++) {
-        for(int j = 0; j < NODE_BYTES; j++){
-            full_nodes_arr[i].bytes[j] = dag_vec[i * NODE_BYTES + j];
-        }
-    }
 
     proof *witnesses = new proof[ETHASH_ACCESSES];
     for(int i = 0; i < ETHASH_ACCESSES; i++) {
@@ -333,7 +329,7 @@ void verify_header(struct header_info_struct* header_info,
         }
     }
 
-    hashimoto(full_nodes_arr,
+    hashimoto(dag_vec,
               header_info->header_hash,
               header_info->nonce,
               header_info->block_num,
@@ -349,10 +345,12 @@ void hash_header_rlp(struct header_info_struct* header_info,
                      const std::vector<unsigned char>& header_rlp_vec,
                      rlp_item* items) {
 
-    int trim_len = remove_last_field_from_rlp((unsigned char *)header_rlp_vec.data(), items[14].len);
+    int trim_len = remove_last_field_from_rlp((unsigned char *)header_rlp_vec.data(),
+                                              items[NONCE_FIELD].len);
     eosio_assert(trim_len == (header_rlp_vec.size() - 9), "wrong 1st trim length");
 
-    trim_len = remove_last_field_from_rlp((unsigned char *)header_rlp_vec.data(), items[13].len);
+    trim_len = remove_last_field_from_rlp((unsigned char *)header_rlp_vec.data(),
+                                          items[MIX_HASH_FIELD].len);
     eosio_assert(trim_len == (header_rlp_vec.size() - 42), "wrong 2nd trim length");
 
     keccak256(header_info->header_hash, (unsigned char *)header_rlp_vec.data(), trim_len);

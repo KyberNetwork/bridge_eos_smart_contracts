@@ -1,0 +1,19 @@
+{
+  "name": "waterloo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bignumber.js": "^8.0.1",
+    "chai": "^4.2.0",
+    "eosjs": "16.0.8",
+    "math": "0.0.3",
+    "mocha": "^5.2.0",
+    "yargs": "^13.2.4"
+  }
+}
