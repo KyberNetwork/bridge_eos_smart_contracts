@@ -17,10 +17,15 @@ typedef unsigned int uint;
 #define ETHASH_EPOCH_LENGTH 30000U
 #define ETHASH_MIX_BYTES 128
 #define ETHASH_ACCESSES 64
+#define MERKLE_CONVENTIONAL_LEN 128
+#define MERKLE_ELEMENT_LEN 32
 
+#define NODE_BYTES 64
 #define NODE_WORDS (64/4)
 #define MIX_WORDS (ETHASH_MIX_BYTES/4) // 32
 #define MIX_NODES (MIX_WORDS / NODE_WORDS) // 2
+
+#define FNV_PRIME 0x01000193
 
 #define MAX_PROOF_DEPTH 40
 
@@ -31,13 +36,6 @@ typedef unsigned int uint;
 #define fix_endian_arr32(arr_, size_)
 #define fix_endian_arr64(arr_, size_)
 
-typedef struct ethash_h256 { uint8_t b[32]; } ethash_h256_t;
-
-typedef struct ethash_return_value {
-    ethash_h256_t result;
-    ethash_h256_t mix_hash;
-} ethash_return_value_t;
-
 typedef union node {
     uint8_t bytes[NODE_WORDS * 4];
     uint32_t words[NODE_WORDS];
@@ -45,13 +43,13 @@ typedef union node {
 } node;
 
 typedef struct proof_struct {
-    uint8_t leaves[MAX_PROOF_DEPTH][32];
+    uint8_t leaves[MAX_PROOF_DEPTH][MERKLE_ELEMENT_LEN];
 } proof;
 
 struct header_info_struct {
     uint64_t nonce;
     uint64_t block_num;
-    ethash_h256_t header_hash;
+    uint8_t header_hash[32];
     uint8_t *expected_root;
     uint8_t *difficulty;
     uint difficulty_len;
@@ -112,7 +110,6 @@ CONTRACT Bridge : public contract {
                           const std::vector<unsigned char>& header_rlp_vec);
 };
 
-#define FNV_PRIME 0x01000193
 uint32_t fnv_hash(uint32_t const x, uint32_t const y)
 {
     return x * FNV_PRIME ^ y;
@@ -129,7 +126,6 @@ void keccak256(uint8_t* ret, uint8_t* input, uint input_size) {
     rhash_keccak_256_init(&shactx);
     rhash_keccak_update(&shactx, input, input_size);
     rhash_keccak_final(&shactx, ret);
-
 }
 
 void keccak512(uint8_t* ret, uint8_t* input, uint input_size) {
@@ -141,10 +137,10 @@ void keccak512(uint8_t* ret, uint8_t* input, uint input_size) {
 
 uint64_t ethash_get_datasize(uint64_t const block_number)
 {
-    eosio_assert(block_number / ETHASH_EPOCH_LENGTH < 1000, "block number too big");
+    eosio_assert(block_number / ETHASH_EPOCH_LENGTH < EPOCH_ELEMENTS, "block number too big");
     int index = block_number / ETHASH_EPOCH_LENGTH;
-    int array_num = index / 200;
-    int index_in_array = index % 200;
+    int array_num = index / EPOCH_SINGLE_ARRAY_SIZE;
+    int index_in_array = index % EPOCH_SINGLE_ARRAY_SIZE;
 
     uint64_t* array;
     switch (array_num) {
@@ -183,26 +179,26 @@ void merkle_conventional_encoding(uint8_t *ret, uint8_t *data) {
 }
 
 void merkle_element_hash(uint8_t *ret, uint8_t *data){
-  uint8_t conventional[128];
+  uint8_t conventional[MERKLE_CONVENTIONAL_LEN];
   merkle_conventional_encoding(conventional, data);
-  sha256(ret, conventional, 128);
+  sha256(ret, conventional, MERKLE_CONVENTIONAL_LEN);
   return;
 }
 
 void merkle_hash_siblings(uint8_t *ret, uint8_t *a, uint8_t *b){
-    uint8_t padded_pair[64] = {0};
+    uint8_t padded_pair[MERKLE_ELEMENT_LEN * 2] = {0};
 
-    memcpy(padded_pair + 32, a, 32);
-    memcpy(padded_pair + 0, b, 32);
+    memcpy(padded_pair + MERKLE_ELEMENT_LEN, a, MERKLE_ELEMENT_LEN);
+    memcpy(padded_pair + 0, b, MERKLE_ELEMENT_LEN);
 
-    sha256(ret, padded_pair, 64);
+    sha256(ret, padded_pair, MERKLE_ELEMENT_LEN * 2);
     return;
 }
 
 void merkle_apply_path(uint index,
                 uint8_t *res, // 32B
                 uint8_t *full_element, // 128B
-                uint8_t proof[][32], /* does not include root and leaf */
+                uint8_t proof[][MERKLE_ELEMENT_LEN], /* does not include root and leaf */
                 uint proof_size) {
    uint8_t *leaf = res;
    uint8_t *left;
@@ -225,9 +221,8 @@ void merkle_apply_path(uint index,
 }
 
 static bool hashimoto(
-    ethash_return_value_t* ret,
     node const* full_nodes,
-    ethash_h256_t const header_hash,
+    uint8_t *header_hash,
     uint64_t const nonce,
     uint64_t block_num,
     proof witnesses[],
@@ -249,7 +244,7 @@ static bool hashimoto(
     memset(s_mix[1].bytes, 0, 64);
     memset(s_mix[2].bytes, 0, 64);
 
-    memcpy(s_mix[0].bytes, &header_hash, 32);
+    memcpy(s_mix[0].bytes, header_hash, 32);
     fix_endian64(s_mix[0].double_words[4], nonce);
 
     // compute sha3-512 hash and replicate across mix
@@ -272,9 +267,10 @@ static bool hashimoto(
         uint32_t const index = fnv_hash(s_mix->words[0] ^ i, mix->words[i % MIX_WORDS]) % num_full_pages;
 
         if(i < 15 && VERIFY) { //TODO: remove check once we figure out how to load 64 proofs
-            uint8_t res[32];
+            uint8_t res[MERKLE_ELEMENT_LEN];
             merkle_apply_path(index, res, (uint8_t *)full_nodes[i*2].bytes, witnesses[i].leaves, proof_length);
-            eosio_assert(0 == memcmp(res,expected_root,32), "merkle verification failure");
+            eosio_assert(0 == memcmp(res, expected_root, MERKLE_ELEMENT_LEN),
+                         "merkle verification failure");
         }
         for (unsigned n = 0; n != MIX_NODES; ++n) {
             node const* dag_node = &full_nodes[i*2 + n];
@@ -295,22 +291,19 @@ static bool hashimoto(
     }
 
     fix_endian_arr32(mix->words, MIX_WORDS / 4);
-    memcpy(&ret->mix_hash, mix->bytes, 32);
 
     // final Keccak hash
-    unsigned char tmp[32] = {0};
-    keccak256(tmp, s_mix->bytes, 64 + 32);
-    memcpy(&ret->result.b[0], tmp, 16); // first 16 bytes
-    memcpy(&ret->result.b[0] + 16, tmp + 16, 16); // last 16 bytes
+    unsigned char ethash[32] = {0};
+    keccak256(ethash, s_mix->bytes, 64 + 32);
 
-    print("result: ");
-    print_uint8_array(ret->result.b, 32);
+    print("ethash: ");
+    print_uint8_array(ethash, 32);
 
     print("mixed_hash: ");
-    print_uint8_array(ret->mix_hash.b, 32);
+    print_uint8_array(mix->bytes, 32);
 
     //check ethash result meets the rquire difficulty
-    eosio_assert(check_pow(difficulty, difficulty_len, ret->result.b), "pow difficulty failure");
+    eosio_assert(check_pow(difficulty, difficulty_len, ethash), "pow difficulty failure");
 
     return true;
 }
@@ -320,37 +313,36 @@ void verify_header(struct header_info_struct* header_info,
                    const std::vector<unsigned char>& proof_vec,
                    uint proof_length) {
 
-    node* full_nodes_arr = new node[128];
-    for(int i = 0; i < 128; i++) {
-        for(int j = 0; j < 64; j++){
-            full_nodes_arr[i].bytes[j] = dag_vec[i * 64 + j];
+    /* Note: nodes and proofs are dynamically allocated,
+       since wasm can not handle their size as static. */
+
+    node* full_nodes_arr = new node[ETHASH_MIX_BYTES];
+    for(int i = 0; i < ETHASH_MIX_BYTES; i++) {
+        for(int j = 0; j < NODE_BYTES; j++){
+            full_nodes_arr[i].bytes[j] = dag_vec[i * NODE_BYTES + j];
         }
     }
 
-    proof *witnesses = new proof[64];
-    for(int i = 0; i < 64; i++) {
+    proof *witnesses = new proof[ETHASH_ACCESSES];
+    for(int i = 0; i < ETHASH_ACCESSES; i++) {
         for(int m = 0; m < proof_length; m++) {
-            for (int k = 0; k < 32; k ++){
+            for (int k = 0; k < MERKLE_ELEMENT_LEN; k ++){
                 witnesses[i].leaves[m][k] =
-                    proof_vec[i * proof_length * 32 + m * 32 + k];
+                    proof_vec[(i * proof_length + m) * MERKLE_ELEMENT_LEN + k];
             }
         }
     }
 
-    ethash_return_value_t r;
-    bool ret = hashimoto(&r,
-                         full_nodes_arr,
-                         header_info->header_hash,
-                         header_info->nonce,
-                         header_info->block_num,
-                         witnesses,
-                         proof_length,
-                         header_info->expected_root,
-                         header_info->difficulty,
-                         header_info->difficulty_len);
-    if (!ret) {
-        // TODO: implement failure case
-    }
+    hashimoto(full_nodes_arr,
+              header_info->header_hash,
+              header_info->nonce,
+              header_info->block_num,
+              witnesses,
+              proof_length,
+              header_info->expected_root,
+              header_info->difficulty,
+              header_info->difficulty_len);
+
 }
 
 void hash_header_rlp(struct header_info_struct* header_info,
@@ -363,10 +355,7 @@ void hash_header_rlp(struct header_info_struct* header_info,
     trim_len = remove_last_field_from_rlp((unsigned char *)header_rlp_vec.data(), items[13].len);
     eosio_assert(trim_len == (header_rlp_vec.size() - 42), "wrong 2nd trim length");
 
-    keccak256(header_info->header_hash.b,
-              (unsigned char *)header_rlp_vec.data(),
-              trim_len);
-
+    keccak256(header_info->header_hash, (unsigned char *)header_rlp_vec.data(), trim_len);
 }
 
 void Bridge::parse_header(struct header_info_struct* header_info,
@@ -396,7 +385,8 @@ ACTION Bridge::storeroots(const std::vector<uint64_t>& epoch_num_vec,
 
     require_auth(_self);
 
-    eosio_assert(epoch_num_vec.size() * 32 == root_vec.size(), "block num and root vectors mismatch");
+    eosio_assert(epoch_num_vec.size() * MERKLE_ELEMENT_LEN == root_vec.size(),
+                 "block num and root vectors mismatch");
     roots_type roots_inst(_self, _self.value);
 
     for(uint i = 0; i < epoch_num_vec.size(); i++){
@@ -404,8 +394,8 @@ ACTION Bridge::storeroots(const std::vector<uint64_t>& epoch_num_vec,
             s.epoch_num = epoch_num_vec[i];
 
             // TODO: improve pushing to use memcpy or std::cpy
-            for(uint j = 0; j < 32; j++ ){
-                s.root.push_back(root_vec[i * 32 + j]);
+            for(uint j = 0; j < MERKLE_ELEMENT_LEN; j++ ){
+                s.root.push_back(root_vec[i * MERKLE_ELEMENT_LEN + j]);
             }
         });
     }
