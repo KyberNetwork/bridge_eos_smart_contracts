@@ -198,7 +198,7 @@ void merkle_hash_siblings(uint8_t *ret, uint8_t *a, uint8_t *b){
 void merkle_apply_path(uint index,
                 uint8_t *res, // 32B
                 uint8_t *full_element, // 128B
-                uint8_t proof[][MERKLE_ELEMENT_LEN], /* does not include root and leaf */
+                uint8_t *proofs_start, /* does not include root and leaf */
                 uint proof_size) {
    uint8_t *leaf = res;
    uint8_t *left;
@@ -207,36 +207,34 @@ void merkle_apply_path(uint index,
    merkle_element_hash(leaf, full_element);
 
    for(int i = 0; i < proof_size; i++) {
+       uint8_t *current_proof = &proofs_start[i * MERKLE_ELEMENT_LEN];
        uint side = index & 0x1;
        if( side ) {
            left = leaf;
-           right = proof[i];
+           right = current_proof;
        } else {
            right = leaf;
-           left = proof[i];
+           left = current_proof;
        }
        merkle_hash_siblings(leaf, left, right);
        index = index / 2;
    }
 }
 
-static bool hashimoto(
-    const std::vector<unsigned char>& dag_vec,
-    uint8_t *header_hash,
-    uint64_t const nonce,
-    uint64_t block_num,
-    proof witnesses[],
-    uint proof_length,
-    uint8_t *expected_root,
-    uint8_t *difficulty,
-    uint difficulty_len
-)
-{
+void verify_header(struct header_info_struct* header_info,
+                   const std::vector<unsigned char>& dag_vec,
+                   const std::vector<unsigned char>& proof_vec,
+                   uint proof_length) {
+
+    uint8_t *header_hash = header_info->header_hash;
+    uint64_t const nonce = header_info->nonce;
+    uint64_t block_num = header_info->block_num;
+    uint8_t *expected_root = header_info->expected_root;
+    uint8_t *difficulty = header_info->difficulty;
+    uint difficulty_len = header_info->difficulty_len;
 
     uint64_t full_size = ethash_get_datasize(block_num);
-    if (full_size % MIX_WORDS != 0) {
-        return false;
-    }
+    eosio_assert(full_size % MIX_WORDS == 0, "wrong full size");
 
     // pack hash and nonce together into first 40 bytes of s_mix
     node s_mix[MIX_NODES + 1];
@@ -270,8 +268,9 @@ static bool hashimoto(
         if(VERIFY && i < 50) { //TODO: remove check once we figure out how to load 64 proofs
             uint8_t res[MERKLE_ELEMENT_LEN];
             uint8_t *current_item = (uint8_t *)(&dag_vec[i * NODE_BYTES * 2]);
+            uint8_t *proofs_start = (uint8_t *)(&proof_vec[i * proof_length * MERKLE_ELEMENT_LEN]);
 
-            merkle_apply_path(index, res, current_item, witnesses[i].leaves, proof_length);
+            merkle_apply_path(index, res, current_item, proofs_start, proof_length);
             eosio_assert(0 == memcmp(res, expected_root, MERKLE_ELEMENT_LEN),
                          "merkle verification failure");
         }
@@ -308,37 +307,7 @@ static bool hashimoto(
     //check ethash result meets the rquire difficulty
     eosio_assert(check_pow(difficulty, difficulty_len, ethash), "pow difficulty failure");
 
-    return true;
-}
-
-void verify_header(struct header_info_struct* header_info,
-                   const std::vector<unsigned char>& dag_vec,
-                   const std::vector<unsigned char>& proof_vec,
-                   uint proof_length) {
-
-    /* Note: proofs are dynamically allocated,
-       since wasm can not handle their size as static. */
-
-    proof *witnesses = new proof[ETHASH_ACCESSES];
-    for(int i = 0; i < ETHASH_ACCESSES; i++) {
-        for(int m = 0; m < proof_length; m++) {
-            for (int k = 0; k < MERKLE_ELEMENT_LEN; k ++){
-                witnesses[i].leaves[m][k] =
-                    proof_vec[(i * proof_length + m) * MERKLE_ELEMENT_LEN + k];
-            }
-        }
-    }
-
-    hashimoto(dag_vec,
-              header_info->header_hash,
-              header_info->nonce,
-              header_info->block_num,
-              witnesses,
-              proof_length,
-              header_info->expected_root,
-              header_info->difficulty,
-              header_info->difficulty_len);
-
+    return;
 }
 
 void hash_header_rlp(struct header_info_struct* header_info,
