@@ -265,7 +265,7 @@ void verify_header(struct header_info_struct* header_info,
 
         uint32_t const index = fnv_hash(s_mix->words[0] ^ i, mix->words[i % MIX_WORDS]) % num_full_pages;
 
-        if(VERIFY && i < 50) { //TODO: remove check once we figure out how to load 64 proofs
+        if(VERIFY && i < 64) {
             uint8_t res[MERKLE_ELEMENT_LEN];
             uint8_t *current_item = (uint8_t *)(&dag_vec[i * NODE_BYTES * 2]);
             uint8_t *proofs_start = (uint8_t *)(&proof_vec[i * proof_length * MERKLE_ELEMENT_LEN]);

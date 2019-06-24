@@ -6,22 +6,21 @@
     -none
 '''
 
+USE_CLEOS=False
+'''
+for non cleos mode need to copy template file and append to it. Like this:
+cp run_template.js try_4700000.js
+python parse_ethashproof_output.py >> run_4700000.js
+'''
+
 PROOF_SIZE = 25
 NUM_PROOFS = 64
-MAX_PROOFS = 50 # this limitation is because of "/usr/local/bin/cleos: Argument list too long" error
+MAX_PROOFS = 64 # this limitation is because of "/usr/local/bin/cleos: Argument list too long" error
 
 # get json data
 
 import json
 
-#also add:
-    #get:
-        #rlp encoded raw data header
-        #nonce,
-        #all 128 results of dataset lookup result
-        #witnessforlookup,
-    #parse block number
-    
 
 dag_chunks = []
 proof_chunks = []
@@ -45,35 +44,72 @@ with open('ethhashproof_output.json') as json_file:
     header_rlp = data['header_rlp'].strip().replace('0x', '').encode("utf-8")
     proof_length = data['proof_length']
 
-# print cleos cmd
-final_st = "cleos push action bridge verify \'{ \n"
+# print tool cmds
 
-final_st = final_st + "\"header_rlp_vec\":[\n"
+final_st = ""
+if USE_CLEOS: 
+    final_st = "cleos push action bridge verify \'{ \n"
+else:
+    final_st = "await bridgeAsRelayer.verify({ \n"
+
+if USE_CLEOS:
+    final_st = final_st + "\"header_rlp_vec\":[\n"
+else:
+    final_st = final_st + "header_rlp_vec:[\n"
+
 split_to_2 = ["0x" + header_rlp[i:i+2] for i in range(0, len(header_rlp), 2)]
 as_str = (', '.join(split_to_2) + ',')
-final_st = final_st + as_str + "],\n"
+rlp_arr = as_str
 
-final_st = final_st + "\"dag_vec\":[\n"
+if USE_CLEOS:
+    final_st = final_st + rlp_arr + "],\n"
+else:
+    final_st = final_st + rlp_arr + "],\n"
+
+if USE_CLEOS:
+    final_st = final_st + "\"dag_vec\":[\n"
+else:
+    final_st = final_st + "dag_vec:[\n"
+
+dag_arr = ""
 for chunk in dag_chunks:
     split_to_2 = ["0x" + chunk[i:i+2] for i in range(0, len(chunk), 2)]
     as_str = (', '.join(split_to_2) + ',')
-    final_st = final_st + as_str + "\n"
-final_st = final_st + "],\n"
+    dag_arr = dag_arr + as_str + "\n"
+final_st = final_st + dag_arr
 
-final_st = final_st + "\"proof_vec\":[\n"
+if USE_CLEOS:
+    final_st = final_st + "],\n"
+else:
+    final_st = final_st + "],\n"
 
+if USE_CLEOS:
+    final_st = final_st + "\"proof_vec\":[\n"
+else:
+    final_st = final_st + "proof_vec:[\n"
+
+proof_arr = ""
 for chunk in proof_chunks:
     n=2
     split_to_2 = ["0x" + chunk[i:i+2] for i in range(0, len(chunk), 2)]
     as_str = (', '.join(split_to_2) + ',')
-    final_st = final_st + as_str + "\n"
-final_st = final_st + "],\n"
+    proof_arr = proof_arr + as_str + "\n"
 
-final_st = final_st + "\"proof_length\":" + str(proof_length) + "\n"
+if USE_CLEOS:
+    final_st = final_st + proof_arr +"],\n"
+else:
+    final_st = final_st + proof_arr +"],\n"
 
-final_st = final_st + "}\' -p bridge@active"
+if USE_CLEOS:
+    final_st = final_st + "\"proof_length\":" + str(proof_length) + "\n"
+else:
+    final_st = final_st + "proof_length:" + str(proof_length) + "},\n"
 
-
-
+if USE_CLEOS:
+    final_st = final_st + "}\' -p bridge@active"
+else:
+    final_st = final_st + "{ authorization: [`${relayerData.account}@active`] } )\n"
+    final_st = final_st + "}\n"
+    final_st = final_st + "main()"
 
 print(final_st)
