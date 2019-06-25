@@ -18,7 +18,7 @@ typedef unsigned int uint;
 #define ETHASH_MIX_BYTES 128
 #define ETHASH_ACCESSES 64
 #define MERKLE_CONVENTIONAL_LEN 128
-#define MERKLE_ELEMENT_LEN 32
+#define MERKLE_ELEMENT_LEN 16
 
 #define NODE_BYTES 64
 #define NODE_WORDS (64/4)
@@ -41,10 +41,6 @@ typedef union node {
     uint32_t words[NODE_WORDS];
     uint64_t double_words[NODE_WORDS / 2];
 } node;
-
-typedef struct proof_struct {
-    uint8_t leaves[MAX_PROOF_DEPTH][MERKLE_ELEMENT_LEN];
-} proof;
 
 struct header_info_struct {
     uint64_t nonce;
@@ -181,22 +177,27 @@ void merkle_conventional_encoding(uint8_t *ret, uint8_t *data) {
 void merkle_element_hash(uint8_t *ret, uint8_t *data){
   uint8_t conventional[MERKLE_CONVENTIONAL_LEN];
   merkle_conventional_encoding(conventional, data);
-  sha256(ret, conventional, MERKLE_CONVENTIONAL_LEN);
+
+  unsigned char tmp[32];
+  sha256(tmp, conventional, 128);
+  memcpy(ret, tmp + 16, 16); // last 16 bytes
   return;
 }
 
 void merkle_hash_siblings(uint8_t *ret, uint8_t *a, uint8_t *b){
-    uint8_t padded_pair[MERKLE_ELEMENT_LEN * 2] = {0};
+    uint8_t padded_pair[64] = {0};
 
-    memcpy(padded_pair + MERKLE_ELEMENT_LEN, a, MERKLE_ELEMENT_LEN);
-    memcpy(padded_pair + 0, b, MERKLE_ELEMENT_LEN);
+    memcpy(padded_pair + 48, a, 16);
+    memcpy(padded_pair + 16, b, 16);
 
-    sha256(ret, padded_pair, MERKLE_ELEMENT_LEN * 2);
+    unsigned char tmp[32];
+    sha256(tmp, padded_pair, 64);
+    memcpy(ret, tmp + 16, 16); // last 16 bytes
     return;
 }
 
 void merkle_apply_path(uint index,
-                uint8_t *res, // 32B
+                uint8_t *res, // 16B
                 uint8_t *full_element, // 128B
                 uint8_t *proofs_start, /* does not include root and leaf */
                 uint proof_size) {
