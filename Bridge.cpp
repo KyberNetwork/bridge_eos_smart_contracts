@@ -357,14 +357,27 @@ ACTION Bridge::storeroots(const std::vector<uint64_t>& epoch_num_vec,
     roots_type roots_inst(_self, _self.value);
 
     for(uint i = 0; i < epoch_num_vec.size(); i++){
-        roots_inst.emplace(_self, [&](auto& s) {
-            s.epoch_num = epoch_num_vec[i];
+        auto itr = roots_inst.find(epoch_num_vec[i]);
+        bool token_exists = (itr != roots_inst.end());
+        if (!token_exists) {
+            roots_inst.emplace(_self, [&](auto& s) {
+                s.epoch_num = epoch_num_vec[i];
 
-            // TODO: improve pushing to use memcpy or std::cpy
-            for(uint j = 0; j < MERKLE_ELEMENT_LEN; j++ ){
-                s.root.push_back(root_vec[i * MERKLE_ELEMENT_LEN + j]);
-            }
-        });
+                // TODO: improve pushing to use memcpy or std::cpy
+                for(uint j = 0; j < MERKLE_ELEMENT_LEN; j++ ){
+                    s.root.push_back(root_vec[i * MERKLE_ELEMENT_LEN + j]);
+                }
+            });
+        } else {
+            roots_inst.modify(itr, _self, [&](auto& s) {
+                s.epoch_num = epoch_num_vec[i];
+
+                // TODO: improve pushing to use memcpy or std::cpy
+                for(uint j = 0; j < MERKLE_ELEMENT_LEN; j++ ){
+                    s.root.push_back(root_vec[i * MERKLE_ELEMENT_LEN + j]);
+                }
+            });
+        }
     }
 };
 
@@ -377,6 +390,7 @@ ACTION Bridge::verify(const std::vector<unsigned char>& header_rlp_vec,
     parse_header(&header_info, header_rlp_vec);
     verify_header(&header_info, dag_vec, proof_vec, proof_length);
     store_header(&header_info);
+
     return;
 }
 
