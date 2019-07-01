@@ -14,6 +14,8 @@ typedef unsigned int uint;
 #include "Rlp.hpp"
 #include "LongMult.hpp"
 
+#define GENESIS_BLOCK 3// this should change to a privileged store action
+
 #define ETHASH_EPOCH_LENGTH 30000U
 #define ETHASH_MIX_BYTES 128
 #define ETHASH_ACCESSES 64
@@ -45,7 +47,9 @@ typedef union node {
 struct header_info_struct {
     uint64_t nonce;
     uint64_t block_num;
+    uint8_t unsealed_header_hash[32];
     uint8_t header_hash[32];
+    uint8_t *previous_hash;
     uint8_t *expected_root;
     uint8_t *difficulty;
     uint difficulty_len;
@@ -99,11 +103,24 @@ CONTRACT Bridge : public contract {
             uint64_t        primary_key() const { return epoch_num; }
         };
 
+        TABLE headers {
+            uint64_t    header_hash; // only 16B out of the hash
+            uint64_t    previous_hash; // only 16B out of the hash
+            uint128_t   total_difficulty;
+            uint64_t    block_num;
+            uint64_t primary_key() const { return header_hash; }
+        };
+
         typedef eosio::multi_index<"roots"_n, roots> roots_type;
+        typedef eosio::multi_index<"headers"_n, headers> headers_type;
+
 
     private:
         void parse_header(struct header_info_struct* header_info,
                           const std::vector<unsigned char>& header_rlp_vec);
+
+        void store_header(struct header_info_struct* header_info);
+
 };
 
 uint32_t fnv_hash(uint32_t const x, uint32_t const y)
@@ -131,10 +148,10 @@ void keccak512(uint8_t* ret, uint8_t* input, uint input_size) {
     rhash_keccak_final(&shactx, ret);
 }
 
-uint64_t ethash_get_datasize(uint64_t const block_number)
+uint64_t ethash_get_datasize(uint64_t const block_num)
 {
-    eosio_assert(block_number / ETHASH_EPOCH_LENGTH < EPOCH_ELEMENTS, "block number too big");
-    int index = block_number / ETHASH_EPOCH_LENGTH;
+    eosio_assert(block_num / ETHASH_EPOCH_LENGTH < EPOCH_ELEMENTS, "block number too big");
+    int index = block_num / ETHASH_EPOCH_LENGTH;
     int array_num = index / EPOCH_SINGLE_ARRAY_SIZE;
     int index_in_array = index % EPOCH_SINGLE_ARRAY_SIZE;
 
@@ -227,7 +244,7 @@ void verify_header(struct header_info_struct* header_info,
                    const std::vector<unsigned char>& proof_vec,
                    uint proof_length) {
 
-    uint8_t *header_hash = header_info->header_hash;
+    uint8_t *header_hash = header_info->unsealed_header_hash;
     uint64_t const nonce = header_info->nonce;
     uint64_t block_num = header_info->block_num;
     uint8_t *expected_root = header_info->expected_root;
@@ -315,6 +332,10 @@ void hash_header_rlp(struct header_info_struct* header_info,
                      const std::vector<unsigned char>& header_rlp_vec,
                      rlp_item* items) {
 
+    // calculate sealed header hash
+    keccak256(header_info->header_hash, (unsigned char *)header_rlp_vec.data(), header_rlp_vec.size());
+
+    // calculate unsealed header hash (w/o nonce and mixed fields).
     int trim_len = remove_last_field_from_rlp((unsigned char *)header_rlp_vec.data(),
                                               items[NONCE_FIELD].len);
     eosio_assert(trim_len == (header_rlp_vec.size() - 9), "wrong 1st trim length");
@@ -323,7 +344,7 @@ void hash_header_rlp(struct header_info_struct* header_info,
                                           items[MIX_HASH_FIELD].len);
     eosio_assert(trim_len == (header_rlp_vec.size() - 42), "wrong 2nd trim length");
 
-    keccak256(header_info->header_hash, (unsigned char *)header_rlp_vec.data(), trim_len);
+    keccak256(header_info->unsealed_header_hash, (unsigned char *)header_rlp_vec.data(), trim_len);
 }
 
 void Bridge::parse_header(struct header_info_struct* header_info,
@@ -335,6 +356,7 @@ void Bridge::parse_header(struct header_info_struct* header_info,
     header_info->block_num = get_uint64(&items[NUMBER_FIELD]);
     header_info->difficulty = items[DIFFICULTY_FIELD].content;
     header_info->difficulty_len = items[DIFFICULTY_FIELD].len;
+    header_info->previous_hash = items[PARENT_HASH_FIELD].content;
 
     hash_header_rlp(header_info, header_rlp_vec, items);
 
@@ -344,8 +366,49 @@ void Bridge::parse_header(struct header_info_struct* header_info,
     header_info->expected_root = root_entry.root.data();
 }
 
-void store_header(struct header_info_struct* header_info) {
-    // TODO - implement with relevant data structure.
+void Bridge::store_header(struct header_info_struct* header_info) {
+
+    headers_type headers_inst(_self, _self.value);
+
+    uint64_t header_hash = *((uint64_t*)header_info->header_hash);
+    uint64_t previous_hash = *((uint64_t*)header_info->previous_hash);
+    uint64_t block_num = header_info->block_num;
+
+    // calculate total difficulty
+    uint128_t previous_total_difficulty;
+
+    if (block_num == GENESIS_BLOCK) {
+        previous_total_difficulty = 0;
+    } else {
+        auto prev_itr = headers_inst.find(previous_hash);
+        bool prev_exists = (prev_itr != headers_inst.end());
+        eosio_assert(prev_exists, "previous header hash does not exist");
+        previous_total_difficulty = prev_itr->total_difficulty;
+    }
+    uint128_t difficulty_value = decode_number128(header_info->difficulty, header_info->difficulty_len);
+    uint128_t total_difficulty = previous_total_difficulty + difficulty_value;
+
+      // store in table
+    auto itr = headers_inst.find(header_hash);
+    bool header_exists = (itr != headers_inst.end());
+    if (!header_exists) {
+        headers_inst.emplace(_self, [&](auto& s) {
+            s.header_hash = header_hash;
+            s.previous_hash = previous_hash;
+            s.total_difficulty = total_difficulty;
+            s.block_num = block_num;
+        });
+    } else {
+        headers_inst.modify(itr, _self, [&](auto& s) {
+            s.header_hash = header_hash;
+            s.previous_hash = previous_hash;
+            s.total_difficulty = total_difficulty;
+            s.block_num = block_num;
+        });
+    }
+
+    //print("total_difficulty", total_difficulty);
+    // TODO - check if global head should change
 }
 
 ACTION Bridge::storeroots(const std::vector<uint64_t>& epoch_num_vec,

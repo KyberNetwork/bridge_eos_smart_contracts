@@ -14,7 +14,7 @@ systemData.eos = Eos({ keyProvider: systemData.privateKey /* , verbose: 'false' 
 async function main (){
 
     /* create eos handler objects */
-    await systemData.eos.transaction(tr => {tr.newaccount({creator: "eosio", name:relayerData.account, owner: relayerData.publicKey, active: relayerData.publicKey})});
+    //await systemData.eos.transaction(tr => {tr.newaccount({creator: "eosio", name:relayerData.account, owner: relayerData.publicKey, active: relayerData.publicKey})});
     
     /* create contract objects */
     bridgeAsRelayer = await relayerData.eos.contract("bridge");
