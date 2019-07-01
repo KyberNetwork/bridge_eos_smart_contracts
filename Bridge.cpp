@@ -4,6 +4,7 @@
 #include <eosiolib/print.hpp>
 #include <eosiolib/types.h>
 #include <eosiolib/crypto.h>
+#include <eosiolib/singleton.hpp>
 typedef unsigned int uint;
 
 #include <string.h>
@@ -89,13 +90,21 @@ CONTRACT Bridge : public contract {
     public:
         using contract::contract;
 
-        ACTION verify(const std::vector<unsigned char>& header_rlp_vec,
+        ACTION relay(const std::vector<unsigned char>& header_rlp_vec,
                       const std::vector<unsigned char>& dag_vec,
                       const std::vector<unsigned char>& proof_vec,
                       uint proof_length);
 
+        ACTION verify(const std::vector<unsigned char>& header_rlp_vec);
+
         ACTION storeroots(const std::vector<uint64_t>& epoch_num_vec,
                           const std::vector<unsigned char>& root_vec);
+
+        TABLE state {
+            uint64_t        headers_head;
+            uint128_t       headers_head_difficulty;
+            uint64_t        block_num;
+        };
 
         TABLE roots {
             uint64_t                     epoch_num;
@@ -111,6 +120,7 @@ CONTRACT Bridge : public contract {
             uint64_t primary_key() const { return header_hash; }
         };
 
+        typedef eosio::singleton<"state"_n, state> state_type;
         typedef eosio::multi_index<"roots"_n, roots> roots_type;
         typedef eosio::multi_index<"headers"_n, headers> headers_type;
 
@@ -118,8 +128,8 @@ CONTRACT Bridge : public contract {
     private:
         void parse_header(struct header_info_struct* header_info,
                           const std::vector<unsigned char>& header_rlp_vec);
-
         void store_header(struct header_info_struct* header_info);
+        void verify_on_longest_path(const std::vector<unsigned char>& header_rlp_vec);
 
 };
 
@@ -367,7 +377,7 @@ void Bridge::parse_header(struct header_info_struct* header_info,
 }
 
 void Bridge::store_header(struct header_info_struct* header_info) {
-
+    state_type state_inst(_self, _self.value);
     headers_type headers_inst(_self, _self.value);
 
     uint64_t header_hash = *((uint64_t*)header_info->header_hash);
@@ -378,6 +388,9 @@ void Bridge::store_header(struct header_info_struct* header_info) {
     uint128_t previous_total_difficulty;
 
     if (block_num == GENESIS_BLOCK) {
+        // genesis can only be input once, and by the contract's owner
+        // TODO - require_auth(_self);
+        eosio_assert(!state_inst.exists(), "init already called");
         previous_total_difficulty = 0;
     } else {
         auto prev_itr = headers_inst.find(previous_hash);
@@ -387,6 +400,12 @@ void Bridge::store_header(struct header_info_struct* header_info) {
     }
     uint128_t difficulty_value = decode_number128(header_info->difficulty, header_info->difficulty_len);
     uint128_t total_difficulty = previous_total_difficulty + difficulty_value;
+
+    // update pointer to list head if needed
+    if( total_difficulty > previous_total_difficulty){
+        state new_state = {header_hash, total_difficulty, block_num};
+        state_inst.set(new_state, _self);
+    }
 
       // store in table
     auto itr = headers_inst.find(header_hash);
@@ -406,10 +425,34 @@ void Bridge::store_header(struct header_info_struct* header_info) {
             s.block_num = block_num;
         });
     }
-
-    //print("total_difficulty", total_difficulty);
-    // TODO - check if global head should change
 }
+
+void Bridge::verify_on_longest_path(const std::vector<unsigned char>& header_rlp_vec) {
+    state_type state_inst(_self, _self.value);
+    headers_type headers_inst(_self, _self.value);
+
+    // calculate sealed header hash
+    uint8_t header_hash_arr[32];
+    keccak256(header_hash_arr, (unsigned char *)header_rlp_vec.data(), header_rlp_vec.size());
+    uint64_t header_hash = *((uint64_t*)header_hash_arr);
+
+    // go backwards from list head and find given header
+    auto s = state_inst.get();
+    if (header_hash == s.headers_head) return; // action is in head - return successfully
+
+    // get previous hash
+    uint64_t current_hash = s.headers_head;
+    while (true) {
+        auto s = headers_inst.get(current_hash, "header is not on longest path");
+        if (s.previous_hash == header_hash) {
+            print("found in block before"); print(s.block_num);
+            return; // found - return successfully
+        }
+        current_hash = s.previous_hash;
+    }
+
+}
+
 
 ACTION Bridge::storeroots(const std::vector<uint64_t>& epoch_num_vec,
                           const std::vector<unsigned char>& root_vec){
@@ -445,10 +488,10 @@ ACTION Bridge::storeroots(const std::vector<uint64_t>& epoch_num_vec,
     }
 };
 
-ACTION Bridge::verify(const std::vector<unsigned char>& header_rlp_vec,
-                      const std::vector<unsigned char>& dag_vec,
-                      const std::vector<unsigned char>& proof_vec,
-                      uint proof_length) {
+ACTION Bridge::relay(const std::vector<unsigned char>& header_rlp_vec,
+                     const std::vector<unsigned char>& dag_vec,
+                     const std::vector<unsigned char>& proof_vec,
+                     uint proof_length) {
 
     struct header_info_struct header_info;
     parse_header(&header_info, header_rlp_vec);
@@ -458,13 +501,21 @@ ACTION Bridge::verify(const std::vector<unsigned char>& header_rlp_vec,
     return;
 }
 
+
+ACTION Bridge::verify(const std::vector<unsigned char>& header_rlp_vec) {
+    verify_on_longest_path(header_rlp_vec);
+
+    // TODO: implement verifying an action/storage
+    return;
+}
+
 extern "C" {
 
     void apply(uint64_t receiver, uint64_t code, uint64_t action) {
 
         if (code == receiver){
             switch( action ) {
-                EOSIO_DISPATCH_HELPER( Bridge, (verify)(storeroots))
+                EOSIO_DISPATCH_HELPER( Bridge, (relay)(verify)(storeroots))
             }
         }
         eosio_exit(0);

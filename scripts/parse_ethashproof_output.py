@@ -48,9 +48,9 @@ with open('ethhashproof_output.json') as json_file:
 
 final_st = ""
 if USE_CLEOS: 
-    final_st = "cleos push action bridge verify \'{ \n"
+    final_st = "cleos push action bridge relay \'{ \n"
 else:
-    final_st = "await bridgeAsRelayer.verify({ \n"
+    final_st = "await bridgeAsRelayer.relay({ \n"
 
 if USE_CLEOS:
     final_st = final_st + "\"header_rlp_vec\":[\n"
