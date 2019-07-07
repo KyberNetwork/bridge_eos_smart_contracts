@@ -24,7 +24,7 @@ import json
 
 dag_chunks = []
 proof_chunks = []
-with open('ethhashproof_output.json') as json_file:  
+with open('ethashproof_output.json') as json_file:  
     data = json.load(json_file)
     for elem in data['elements']:
         stripped = elem.strip().replace('0x', '')

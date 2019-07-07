@@ -1,9 +1,0 @@
-status:
-*aligned to following commit in ethashproof tool: e309e44874f299a2c1cb32bc50d39418533b09db
-*last supported code when running natively on x86: d6ee697f6b59b6c6f53f275a678e7399b6e5218a
-
-caveats:
-*limited to only 30 proofs because of "/usr/local/bin/cleos: Argument list too long" error
-*dag_sizes array got errors on its size, decreased it from to 200*5 for now (10 years).
-
-
