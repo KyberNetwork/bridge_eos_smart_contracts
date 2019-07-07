@@ -17,7 +17,7 @@ typedef unsigned int uint;
 #include "MerklePatriciaProof.hpp"
 
 
-#define GENESIS_BLOCK 3// this should change to a privileged store action
+#define GENESIS_BLOCK 8100070// this should change to a privileged store action
 
 #define ETHASH_EPOCH_LENGTH 30000U
 #define ETHASH_MIX_BYTES 128
@@ -102,8 +102,7 @@ CONTRACT Bridge : public contract {
                             const std::vector<unsigned char>& encoded_path,
                             const std::vector<unsigned char>& rlp_receipt, // value
                             const std::vector<unsigned char>& all_parent_nodes_rlps,
-                            const std::vector<uint>& all_parnet_rlp_sizes,
-                            const std::vector<unsigned char>& root );
+                            const std::vector<uint>& all_parnet_rlp_sizes);
 
         ACTION storeroots(const std::vector<uint64_t>& epoch_num_vec,
                           const std::vector<unsigned char>& root_vec);
@@ -501,14 +500,12 @@ ACTION Bridge::checkreceipt(const std::vector<unsigned char>& header_rlp_vec,
                             const std::vector<unsigned char>& encoded_path,
                             const std::vector<unsigned char>& rlp_receipt, // value
                             const std::vector<unsigned char>& all_parent_nodes_rlps,
-                            const std::vector<uint>& all_parnet_rlp_sizes,
-                            const std::vector<unsigned char>& root ) {
+                            const std::vector<uint>& all_parnet_rlp_sizes) {
     verify_on_longest_path(header_rlp_vec);
 
     struct header_info_struct header_info;
     parse_header(&header_info, header_rlp_vec);
 
-    // creat vector out of receipt root
     eosio_assert(trieValue(encoded_path,
                            rlp_receipt,
                            all_parent_nodes_rlps,
