@@ -14,6 +14,8 @@ typedef unsigned int uint;
 #include "sha3/sha3.hpp"
 #include "Rlp.hpp"
 #include "LongMult.hpp"
+#include "MerklePatriciaProof.hpp"
+
 
 #define GENESIS_BLOCK 3// this should change to a privileged store action
 
@@ -53,6 +55,7 @@ struct header_info_struct {
     uint8_t *previous_hash;
     uint8_t *expected_root;
     uint8_t *difficulty;
+    uint8_t *receipt_root;
     uint difficulty_len;
 };
 
@@ -95,7 +98,12 @@ CONTRACT Bridge : public contract {
                       const std::vector<unsigned char>& proof_vec,
                       uint proof_length);
 
-        ACTION verify(const std::vector<unsigned char>& header_rlp_vec);
+        ACTION checkreceipt(const std::vector<unsigned char>& header_rlp_vec,
+                            const std::vector<unsigned char>& encoded_path,
+                            const std::vector<unsigned char>& rlp_receipt, // value
+                            const std::vector<unsigned char>& all_parent_nodes_rlps,
+                            const std::vector<uint>& all_parnet_rlp_sizes,
+                            const std::vector<unsigned char>& root );
 
         ACTION storeroots(const std::vector<uint64_t>& epoch_num_vec,
                           const std::vector<unsigned char>& root_vec);
@@ -142,20 +150,6 @@ void sha256(uint8_t* ret, uint8_t* input, uint input_size) {
     capi_checksum256 csum; //TODO - change to get on input
     eosio:sha256((char *)input, input_size, &csum);
     memcpy(ret, csum.hash, 32);
-}
-
-void keccak256(uint8_t* ret, uint8_t* input, uint input_size) {
-    sha3_ctx shactx;
-    rhash_keccak_256_init(&shactx);
-    rhash_keccak_update(&shactx, input, input_size);
-    rhash_keccak_final(&shactx, ret);
-}
-
-void keccak512(uint8_t* ret, uint8_t* input, uint input_size) {
-    sha3_ctx shactx;
-    rhash_keccak_512_init(&shactx);
-    rhash_keccak_update(&shactx, input, input_size);
-    rhash_keccak_final(&shactx, ret);
 }
 
 uint64_t ethash_get_datasize(uint64_t const block_num)
@@ -360,13 +354,15 @@ void hash_header_rlp(struct header_info_struct* header_info,
 void Bridge::parse_header(struct header_info_struct* header_info,
                           const std::vector<unsigned char>& header_rlp_vec) {
     rlp_item items[15];
-    decode_list((unsigned char *)header_rlp_vec.data(), items);
+    uint num_items;
+    decode_list((unsigned char *)header_rlp_vec.data(), items, &num_items);
 
     header_info->nonce = get_uint64(&items[NONCE_FIELD]);
     header_info->block_num = get_uint64(&items[NUMBER_FIELD]);
     header_info->difficulty = items[DIFFICULTY_FIELD].content;
     header_info->difficulty_len = items[DIFFICULTY_FIELD].len;
     header_info->previous_hash = items[PARENT_HASH_FIELD].content;
+    header_info->receipt_root = items[RECIEPT_ROOT_FIELD].content;
 
     hash_header_rlp(header_info, header_rlp_vec, items);
 
@@ -453,7 +449,6 @@ void Bridge::verify_on_longest_path(const std::vector<unsigned char>& header_rlp
 
 }
 
-
 ACTION Bridge::storeroots(const std::vector<uint64_t>& epoch_num_vec,
                           const std::vector<unsigned char>& root_vec){
 
@@ -502,10 +497,27 @@ ACTION Bridge::relay(const std::vector<unsigned char>& header_rlp_vec,
 }
 
 
-ACTION Bridge::verify(const std::vector<unsigned char>& header_rlp_vec) {
+ACTION Bridge::checkreceipt(const std::vector<unsigned char>& header_rlp_vec,
+                            const std::vector<unsigned char>& encoded_path,
+                            const std::vector<unsigned char>& rlp_receipt, // value
+                            const std::vector<unsigned char>& all_parent_nodes_rlps,
+                            const std::vector<uint>& all_parnet_rlp_sizes,
+                            const std::vector<unsigned char>& root ) {
     verify_on_longest_path(header_rlp_vec);
 
-    // TODO: implement verifying an action/storage
+    struct header_info_struct header_info;
+    parse_header(&header_info, header_rlp_vec);
+
+    // creat vector out of receipt root
+    eosio_assert(trieValue(encoded_path,
+                           rlp_receipt,
+                           all_parent_nodes_rlps,
+                           all_parnet_rlp_sizes,
+                           header_info.receipt_root),
+                 "failed receipt patricia trie verification"
+    );
+
+    // TODO: return indication to user/locking contract
     return;
 }
 
@@ -515,7 +527,7 @@ extern "C" {
 
         if (code == receiver){
             switch( action ) {
-                EOSIO_DISPATCH_HELPER( Bridge, (relay)(verify)(storeroots))
+                EOSIO_DISPATCH_HELPER( Bridge, (relay)(checkreceipt)(storeroots))
             }
         }
         eosio_exit(0);

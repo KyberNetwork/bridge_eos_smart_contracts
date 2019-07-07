@@ -74,7 +74,7 @@ static uint decode_string(unsigned char* input, rlp_item* output) {
 
 /*****************************************************************************/
 
-static void decode_list(unsigned char* input, rlp_item* outputs) {
+static void decode_list(unsigned char* input, rlp_item* outputs, uint *output_list_len) {
     unsigned char first_byte = input[0];
     uint len_num_bytes;
     uint list_len;
@@ -84,6 +84,7 @@ static void decode_list(unsigned char* input, rlp_item* outputs) {
     unsigned char* current_input = input;
 
     if(first_byte <= 0xf7) {
+        len_num_bytes = 0;
         list_len = first_byte - 0xc0;
         current_input = input + 1;
     }
@@ -94,7 +95,7 @@ static void decode_list(unsigned char* input, rlp_item* outputs) {
     }
 
     outputs_ind = 0;
-    for(elm_ind = 0 ; /*elm_ind < list_len*/ current_input < input + list_len /* elm_ind < 20*/ ; elm_ind++)
+    for(elm_ind = 0 ; /*elm_ind < list_len*/ current_input < input + list_len + len_num_bytes + 1/* elm_ind < 20*/ ; elm_ind++)
     {
         first_byte = current_input[0];
 
@@ -107,6 +108,7 @@ static void decode_list(unsigned char* input, rlp_item* outputs) {
         current_input += elm_len;
         outputs_ind += 1;
     }
+    *output_list_len = outputs_ind;
 }
 
 /*****************************************************************************/
