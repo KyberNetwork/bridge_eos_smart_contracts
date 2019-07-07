@@ -1,0 +1,3 @@
+[submodule "ethashproof"]
+	path = ethashproof
+	url = git@github.com:tranvictor/ethashproof.git
