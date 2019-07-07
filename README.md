@@ -8,8 +8,8 @@ https://github.com/KyberNetwork/bridge_eth_smart_contracts
 
 ## Installation
 
-run `git submodule update --recursive`
-follow each submodule build procedure
+Run `git submodule update --recursive`.
+Follow each submodule build procedure
 
 ## Note
 
