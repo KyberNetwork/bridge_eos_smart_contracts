@@ -10,7 +10,7 @@ typedef unsigned int uint;
 #include <string.h>
 #include <vector>
 
-#include "data_sizes.h"
+#include "DataSizes.h"
 #include "sha3/sha3.hpp"
 #include "Rlp.hpp"
 #include "LongMult.hpp"
