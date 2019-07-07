@@ -4,7 +4,7 @@ const path = require('path');
 const assert = require('assert');
 
 /* Assign keypairs. to accounts. Use unique name prefixes to prevent collisions between test modules. */
-const keyPairArray = JSON.parse(fs.readFileSync("scripts/keys.json"))
+const keyPairArray = JSON.parse(fs.readFileSync("scripts/local/keys.json"))
 const relayerData =    {account: "relayer",   publicKey: keyPairArray[0][0], privateKey: keyPairArray[0][1]}
 const systemData =  {account: "eosio", publicKey: "EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV", privateKey: "5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3"}
 

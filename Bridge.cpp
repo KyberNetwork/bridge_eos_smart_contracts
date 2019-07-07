@@ -16,9 +16,6 @@ typedef unsigned int uint;
 #include "LongMult.hpp"
 #include "MerklePatriciaProof.hpp"
 
-
-#define GENESIS_BLOCK 8100070// this should change to a privileged store action
-
 #define ETHASH_EPOCH_LENGTH 30000U
 #define ETHASH_MIX_BYTES 128
 #define ETHASH_ACCESSES 64
@@ -104,13 +101,15 @@ CONTRACT Bridge : public contract {
                             const std::vector<unsigned char>& all_parent_nodes_rlps,
                             const std::vector<uint>& all_parnet_rlp_sizes);
 
-        ACTION storeroots(const std::vector<uint64_t>& epoch_num_vec,
+        ACTION storeroots(uint64_t genesis_block_num,
+                          const std::vector<uint64_t>& epoch_num_vec,
                           const std::vector<unsigned char>& root_vec);
 
         TABLE state {
             uint64_t        headers_head;
             uint128_t       headers_head_difficulty;
-            uint64_t        block_num;
+            uint64_t        headers_head_block_num;
+            uint64_t        genesis_block_num;
         };
 
         TABLE roots {
@@ -382,10 +381,9 @@ void Bridge::store_header(struct header_info_struct* header_info) {
     // calculate total difficulty
     uint128_t previous_total_difficulty;
 
-    if (block_num == GENESIS_BLOCK) {
-        // genesis can only be input once, and by the contract's owner
+    if (block_num == state_inst.get().genesis_block_num) {
+        // genesis can only be input by the contract's owner
         // TODO - require_auth(_self);
-        eosio_assert(!state_inst.exists(), "init already called");
         previous_total_difficulty = 0;
     } else {
         auto prev_itr = headers_inst.find(previous_hash);
@@ -397,9 +395,12 @@ void Bridge::store_header(struct header_info_struct* header_info) {
     uint128_t total_difficulty = previous_total_difficulty + difficulty_value;
 
     // update pointer to list head if needed
-    if( total_difficulty > previous_total_difficulty){
-        state new_state = {header_hash, total_difficulty, block_num};
-        state_inst.set(new_state, _self);
+    auto s = state_inst.get();
+    if( total_difficulty > s.headers_head_difficulty){
+        s.headers_head = header_hash;
+        s.headers_head_difficulty = total_difficulty;
+        s.headers_head_block_num = block_num;
+        state_inst.set(s, _self);
     }
 
       // store in table
@@ -448,10 +449,16 @@ void Bridge::verify_on_longest_path(const std::vector<unsigned char>& header_rlp
 
 }
 
-ACTION Bridge::storeroots(const std::vector<uint64_t>& epoch_num_vec,
+ACTION Bridge::storeroots(uint64_t genesis_block_num,
+                          const std::vector<uint64_t>& epoch_num_vec,
                           const std::vector<unsigned char>& root_vec){
 
     require_auth(_self);
+
+    state_type state_inst(_self, _self.value);
+    eosio_assert(!state_inst.exists(), "storing roots can only be done once");
+    state initial_state = {0, 0, 0, genesis_block_num};
+    state_inst.set(initial_state, _self);
 
     eosio_assert(epoch_num_vec.size() * MERKLE_ELEMENT_LEN == root_vec.size(),
                  "block num and root vectors mismatch");
