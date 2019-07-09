@@ -12,7 +12,7 @@ typedef unsigned int uint;
 
 #include "DataSizes.h"
 #include "sha3/sha3.hpp"
-#include "Rlp.hpp"
+#include "../Common/Rlp.hpp"
 #include "LongMult.hpp"
 #include "MerklePatriciaProof.hpp"
 
@@ -521,7 +521,6 @@ ACTION Bridge::checkreceipt(const std::vector<unsigned char>& header_rlp_vec,
                  "failed receipt patricia trie verification"
     );
 
-    // TODO: return indication to user/locking contract
     return;
 }
 
