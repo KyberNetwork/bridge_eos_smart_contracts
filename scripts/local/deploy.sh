@@ -24,6 +24,8 @@ cleos push action bridge storeroots "{
 }" -p bridge@active
 
 cleos set contract unlock contracts/Unlock Unlock.wasm --abi Unlock.abi -p unlock@active
+cleos set account permission unlock active "{\"threshold\": 1, \"keys\":[{\"key\":\"$PUBLIC_KEY\", \"weight\":1}] , \"accounts\":[{\"permission\":{\"actor\":\"unlock\",\"permission\":\"eosio.code\"},\"weight\":1}], \"waits\":[] }" owner -p unlock@active
+
 cleos push action unlock config "{
 \"token_contract\":\"eosio.token\"
 \"token_symbol\": \"4,EOS\",

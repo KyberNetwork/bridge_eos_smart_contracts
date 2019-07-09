@@ -3,7 +3,6 @@
 #include <eosiolib/eosio.hpp>
 #include <eosiolib/print.hpp>
 #include <eosiolib/types.h>
-#include <eosiolib/crypto.h>
 #include <eosiolib/singleton.hpp>
 typedef unsigned int uint;
 
@@ -11,8 +10,9 @@ typedef unsigned int uint;
 #include <vector>
 
 #include "DataSizes.h"
-#include "sha3/sha3.hpp"
+#include "../Common/sha3/sha3.hpp"
 #include "../Common/Rlp.hpp"
+#include "../Common/Common.hpp"
 #include "LongMult.hpp"
 #include "MerklePatriciaProof.hpp"
 
@@ -56,34 +56,6 @@ struct header_info_struct {
     uint difficulty_len;
 };
 
-/* helper functions - TODO - remove in production*/
-static std::vector<unsigned char> hex_to_bytes(const std::string& hex) {
-    std::vector<unsigned char> bytes;
-
-    for (unsigned int i = 0; i < hex.length(); i += 2) {
-            std::string byteString = hex.substr(i, 2);
-            unsigned char byte = (unsigned char) strtol(byteString.c_str(), NULL, 16);
-            bytes.push_back(byte);
-    }
-    return bytes;
-}
-
-void hex_to_arr(const std::string& hex, uint8_t *arr) {
-    std::vector<unsigned char> bytes = hex_to_bytes(hex);
-    std::copy(bytes.begin(), bytes.end(), arr);
-}
-
-void print_uint8_array(uint8_t *arr, uint size){
-    for(int j = 0; j < size; j++) {
-        const uint8_t* a = &arr[j];
-        unsigned int y = (unsigned int)a[0];
-        eosio::print(y);
-        eosio::print(",");
-    }
-    eosio::print("\n");
-}
-/* end of helper functions */
-
 using namespace eosio;
 CONTRACT Bridge : public contract {
 
@@ -94,6 +66,8 @@ CONTRACT Bridge : public contract {
                       const std::vector<unsigned char>& dag_vec,
                       const std::vector<unsigned char>& proof_vec,
                       uint proof_length);
+
+        ACTION veriflongest(const std::vector<unsigned char>& header_hash);
 
         ACTION checkreceipt(const std::vector<unsigned char>& header_rlp_vec,
                             const std::vector<unsigned char>& encoded_path,
@@ -119,35 +93,36 @@ CONTRACT Bridge : public contract {
         };
 
         TABLE headers {
-            uint64_t    header_hash; // only 16B out of the hash
-            uint64_t    previous_hash; // only 16B out of the hash
+            // TODO - only 8B out of the hash, in production add 32B to result and compare
+            uint64_t    header_hash;
+            uint64_t    previous_hash;
             uint128_t   total_difficulty;
             uint64_t    block_num;
+            std::vector<uint64_t> receipt_hashes; // only 8B out of the hash
             uint64_t primary_key() const { return header_hash; }
+        };
+
+        TABLE receipts {
+            // TODO - only 8B out of the hash, in production add 32B to result and compare
+            uint64_t    receipt_header_hash;
+            uint64_t primary_key() const { return receipt_header_hash; }
         };
 
         typedef eosio::singleton<"state"_n, state> state_type;
         typedef eosio::multi_index<"roots"_n, roots> roots_type;
         typedef eosio::multi_index<"headers"_n, headers> headers_type;
+        typedef eosio::multi_index<"receipts"_n, receipts> receipts_type;
 
 
     private:
         void parse_header(struct header_info_struct* header_info,
                           const std::vector<unsigned char>& header_rlp_vec);
         void store_header(struct header_info_struct* header_info);
-        void verify_on_longest_path(const std::vector<unsigned char>& header_rlp_vec);
-
 };
 
 uint32_t fnv_hash(uint32_t const x, uint32_t const y)
 {
     return x * FNV_PRIME ^ y;
-}
-
-void sha256(uint8_t* ret, uint8_t* input, uint input_size) {
-    capi_checksum256 csum; //TODO - change to get on input
-    eosio:sha256((char *)input, input_size, &csum);
-    memcpy(ret, csum.hash, 32);
 }
 
 uint64_t ethash_get_datasize(uint64_t const block_num)
@@ -423,29 +398,28 @@ void Bridge::store_header(struct header_info_struct* header_info) {
     }
 }
 
-void Bridge::verify_on_longest_path(const std::vector<unsigned char>& header_rlp_vec) {
+ACTION Bridge::veriflongest(const std::vector<unsigned char>& header_hash) {
     state_type state_inst(_self, _self.value);
     headers_type headers_inst(_self, _self.value);
 
-    // calculate sealed header hash
-    uint8_t header_hash_arr[32];
-    keccak256(header_hash_arr, (unsigned char *)header_rlp_vec.data(), header_rlp_vec.size());
-    uint64_t header_hash = *((uint64_t*)header_hash_arr);
+    uint64_t header_hash_key = *((uint64_t*)&header_hash[0]);
 
     // go backwards from list head and find given header
     auto s = state_inst.get();
-    if (header_hash == s.headers_head) return; // action is in head - return successfully
+    if (header_hash_key == s.headers_head) return; // action is in head - return successfully
 
     // get previous hash
     uint64_t current_hash = s.headers_head;
     while (true) {
         auto s = headers_inst.get(current_hash, "header is not on longest path");
-        if (s.previous_hash == header_hash) {
+        if (s.previous_hash == header_hash_key) {
             print("found in block before"); print(s.block_num);
             return; // found - return successfully
         }
         current_hash = s.previous_hash;
     }
+
+    eosio_assert(false, "not on longest path");
 
 }
 
@@ -508,8 +482,6 @@ ACTION Bridge::checkreceipt(const std::vector<unsigned char>& header_rlp_vec,
                             const std::vector<unsigned char>& rlp_receipt, // value
                             const std::vector<unsigned char>& all_parent_nodes_rlps,
                             const std::vector<uint>& all_parnet_rlp_sizes) {
-    verify_on_longest_path(header_rlp_vec);
-
     struct header_info_struct header_info;
     parse_header(&header_info, header_rlp_vec);
 
@@ -520,6 +492,31 @@ ACTION Bridge::checkreceipt(const std::vector<unsigned char>& header_rlp_vec,
                            header_info.receipt_root),
                  "failed receipt patricia trie verification"
     );
+
+    // store combined sha256 of (sha256(receipt rlp),header hash)
+    uint8_t rlp_receipt_hash[32];
+    sha256(rlp_receipt_hash, (uint8_t *)&rlp_receipt[0], rlp_receipt.size());
+
+    uint8_t combined_hash_input[64];
+    memcpy(combined_hash_input, header_info.header_hash, 32);
+    memcpy(combined_hash_input + 32, rlp_receipt_hash, 32);
+
+    uint8_t combined_hash_output[32];
+    sha256(combined_hash_output, combined_hash_input, 64);
+    uint64_t *receipt_header_hash = (uint64_t *)combined_hash_output;
+
+    receipts_type receipts_inst(_self, _self.value);
+    auto itr = receipts_inst.find(*receipt_header_hash);
+    bool exists = (itr != receipts_inst.end());
+    if (!exists) {
+        receipts_inst.emplace(_self, [&](auto& s) {
+            s.receipt_header_hash = *receipt_header_hash;
+        });
+    } else {
+        receipts_inst.modify(itr, _self, [&](auto& s) {
+            s.receipt_header_hash = *receipt_header_hash;
+        });
+    }
 
     return;
 }
