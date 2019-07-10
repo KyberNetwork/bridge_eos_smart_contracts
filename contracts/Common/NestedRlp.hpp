@@ -19,18 +19,35 @@ using eosio::print;
 
 typedef unsigned int uint;
 
-typedef struct _rlp_item {
-    unsigned char* content;
-    uint  len; /* length in bytes */
-
-} rlp_item;
+typedef struct _rlp_elem {
+    unsigned char*     content;
+    uint               len;
+    struct _rlp_elem*  list;
+    bool               is_list;
+    struct _rlp_elem*  next;
+} rlp_elem;
 
 
 /*****************************************************************************/
 
-static uint decode_single_byte(unsigned char* input, rlp_item* output) {
+static rlp_elem* get_n_elem(rlp_elem* list, uint n) {
+    uint i;
+    rlp_elem* curr = list->list;
+
+    for(i = 0 ; i < n ; i++) {
+        if(curr->next == NULL) return NULL;
+        curr = curr->next;
+    }
+
+    return curr;
+}
+
+/*****************************************************************************/
+
+static uint decode_single_byte(unsigned char* input, rlp_elem* output) {
     output->content = input;
     output->len = 1;
+    output->is_list = false;
 
     return 1;
 }
@@ -50,10 +67,12 @@ static uint decode_number(unsigned char* input, uint len) {
 
 /*****************************************************************************/
 
-static uint decode_string(unsigned char* input, rlp_item* output) {
+static uint decode_string(unsigned char* input, rlp_elem* output) {
     unsigned char first_byte = input[0];
     uint len_num_bytes;
     uint string_len;
+
+    output->is_list = false;
 
     if(first_byte <= 0xb7) {
         output->len = first_byte - 0x80;
@@ -73,7 +92,7 @@ static uint decode_string(unsigned char* input, rlp_item* output) {
 
 /*****************************************************************************/
 
-static void decode_list(unsigned char* input, rlp_item* outputs, uint *output_list_len) {
+static uint decode_list(unsigned char* input, rlp_elem* list, rlp_elem** scrath_pad) {
     unsigned char first_byte = input[0];
     uint len_num_bytes;
     uint list_len;
@@ -81,10 +100,13 @@ static void decode_list(unsigned char* input, rlp_item* outputs, uint *output_li
     uint elm_len;
     uint outputs_ind;
     unsigned char* current_input = input;
+    rlp_elem* prev = NULL;
+    rlp_elem* curr;
+    //printf("decode list start %u\n", cntr++);
 
     if(first_byte <= 0xf7) {
-        len_num_bytes = 0;
         list_len = first_byte - 0xc0;
+        len_num_bytes = 0;
         current_input = input + 1;
     }
     else {
@@ -93,21 +115,40 @@ static void decode_list(unsigned char* input, rlp_item* outputs, uint *output_li
         current_input = input + 1 + len_num_bytes;
     }
 
+    //printf("list len %u\n", list_len);
+
     outputs_ind = 0;
-    for(elm_ind = 0 ; /*elm_ind < list_len*/ current_input < input + list_len + len_num_bytes + 1/* elm_ind < 20*/ ; elm_ind++)
+    list->is_list = true;
+    curr = list->list = (*scrath_pad)++;
+    for(elm_ind = 0 ; /*elm_ind < list_len*/ current_input < input + list_len + len_num_bytes + 1 /* elm_ind < 20*/ ; elm_ind++)
     {
         first_byte = current_input[0];
 
-        if(first_byte <= 0x7f) elm_len = decode_single_byte(current_input,outputs + outputs_ind);
-        else if(first_byte <= 0xbf) elm_len = decode_string(current_input,outputs + outputs_ind);
+        memset(curr, 0x00, sizeof(rlp_elem));
+
+        if(first_byte <= 0x7f) elm_len = decode_single_byte(current_input,curr);
+        else if(first_byte <= 0xbf) elm_len = decode_string(current_input,curr);
         else {
-            eosio_assert(false, "error: recursive list");
+            curr->list = (*scrath_pad)++;
+            memset(curr->list, 0x00, sizeof(rlp_elem));
+
+            elm_len = decode_list(current_input,
+                          curr,
+                          scrath_pad);
         }
 
         current_input += elm_len;
         outputs_ind += 1;
+
+        if(prev != NULL) prev->next = curr;
+
+        prev = curr;
+        curr = (*scrath_pad)++;
     }
-    *output_list_len = outputs_ind;
+
+    //printf("decode list end %u\n", cntr--);
+
+    return list_len + len_num_bytes + 1;
 }
 
 /*****************************************************************************/
@@ -118,23 +159,23 @@ static uint remove_last_field_from_rlp(unsigned char* rlp, uint field_len) {
     uint rlp_final_len;
     uint rlp_len_num_bytes;
 
-    if(rlp[0] <= 0xf7) eosio_assert(0, "error: rlp is too short\n");
+    if(rlp[0] <= 0xf7) printf("error: rlp is too short\n");
 
     rlp_len_num_bytes = rlp[0] - 0xf7;
     rlp_org_len = decode_number(rlp + 1, rlp_len_num_bytes);
 
-    if(field_len >= 55) eosio_assert(0,"error: unexpected field_len\n");
-    if(rlp_org_len <= 55 - field_len) eosio_assert(0,"error: rlp is too short\n");
+    if(field_len >= 55) printf("error: unexpected field_len\n");
+    if(rlp_org_len <= 55 - field_len) printf("error: rlp is too short\n");
 
-    if(field_len == 0) field_len_field_len = 0; // would happen once every 2^64 blocks...
+    if(field_len == 0) field_len_field_len = 0; // would happen once evey 2^64 blocks...
     else if(field_len <= 55) field_len_field_len = 1;
-    else eosio_assert(0,"error: unexpected field_len\n");
+    else printf("error: unexpected field_len\n");
 
     rlp_final_len = rlp_org_len - (field_len + field_len_field_len);
 
     // make sure number of bytes wasn't chage
-    if(rlp_final_len <= 256) eosio_assert(0,"error: unexpcted rlp len\n");
-    if(rlp_org_len >= 256 * 256) eosio_assert(0,"error: unexpecpted rlp len\n");
+    if(rlp_final_len <= 256) printf("error: unexpcted rlp len\n");
+    if(rlp_org_len >= 256 * 256) printf("error: unexpecpted rlp len\n");
 
     // new length is exactly 2 bytes
     rlp[1] = rlp_final_len >> 8;
@@ -144,12 +185,3 @@ static uint remove_last_field_from_rlp(unsigned char* rlp, uint field_len) {
 }
 
 /*****************************************************************************/
-
-uint64_t get_uint64(rlp_item* item) {
-    uint64_t result = 0;
-    for(int i = 0 ; i < item->len ; i++) {
-        result = result << 8;
-        result += (unsigned char)item->content[i];
-    }
-    return result;
-}

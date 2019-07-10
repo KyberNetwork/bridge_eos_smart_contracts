@@ -11,6 +11,7 @@ typedef unsigned int uint;
 
 #include "../Common/sha3/sha3.hpp"
 #include "../Common/Common.hpp"
+#include "../Common/NestedRlp.hpp"
 
 using byte = uint8_t;
 using bytes = std::vector<byte>;
@@ -50,28 +51,6 @@ CONTRACT Unlock : public contract {
     private:
 
 };
-
-//////// tmp functions untill we have nested lists rlp decoding ///////
-uint8_t* get_address(const std::vector<unsigned char> &value, uint event_num) {
-    return (uint8_t*)&value[272];
-}
-
-uint8_t* get_topic(const std::vector<unsigned char> &value, uint event_num, uint topic_num) {
-    if (topic_num == 0) {
-        return (uint8_t*)&value[295];
-    } else if (topic_num == 1) {
-        return (uint8_t*)&value[328];
-    } else if (topic_num == 2) {
-        return (uint8_t*)&value[361];
-    } else {
-        return 0;
-    }
-}
-
-uint8_t* get_data(const std::vector<unsigned char> &value, uint event_num) {
-    return (uint8_t*)&value[394];
-}
-/////////
 
 ACTION Unlock::config(name token_contract,
                       symbol token_symbol,
@@ -121,26 +100,37 @@ ACTION Unlock::unlock(const std::vector<unsigned char>& header_rlp_vec,
     eosio_assert(receipt_table.find(*receipt_header_hash) != receipt_table.end(),
                  "reciept not verified in bridge contract");
 
-    // 20 bytes
-    uint8_t *address = get_address(rlp_receipt, 0);
-    eosio_assert(memcmp(knc_address, address, 20) == 0,
+    rlp_elem elem[100] = {0};
+    rlp_elem* list = elem;
+    rlp_elem* elem_ptr = elem + 1;
+    uint num_elem, i;
+    decode_list((uint8_t *)&rlp_receipt[0], list, &elem_ptr);
+
+    rlp_elem* logs = get_n_elem(list, 3);
+    rlp_elem* first_event = get_n_elem(logs, 0);
+
+    rlp_elem* address = get_n_elem(first_event, 0);
+
+    rlp_elem* topics = get_n_elem(first_event, 1);
+    rlp_elem* function_signature = get_n_elem(topics, 0); // 1st topic
+    rlp_elem *from = get_n_elem(topics, 1); // 2nd topic
+    rlp_elem *to = get_n_elem(topics, 2); // 3rd topic
+
+    // amount not indexed, so in data field
+    rlp_elem *amount = get_n_elem(first_event, 2);
+
+    //uint8_t *address = get_address(rlp_receipt, 0);
+    eosio_assert(memcmp(knc_address, address->content, 20) == 0,
                  "adress is not for knc contract address");
-
-    // each field size is 32
-    uint8_t *function_signature = get_topic(rlp_receipt, 0, 0); // 1st topic
-    uint8_t *from = get_topic(rlp_receipt, 0, 1); // 2nd topic
-    uint8_t *to = get_topic(rlp_receipt, 0, 2); // 3rd topic
-    uint8_t *amount = get_data(rlp_receipt, 0); // not indexed, so data field
-
     // parse data
-    eosio_assert(memcmp(transfer_signature, function_signature, 32) == 0,
+    eosio_assert(memcmp(transfer_signature, function_signature->content, 32) == 0,
                  "function signature is not for knc transfer");
 
     // fix endianess
     uint128_t amount_128 = 0;
     for(int i = 0; i < 16; i++){
         amount_128 = amount_128 << 8;
-        amount_128 = amount_128 + (uint8_t)amount[16 + i];
+        amount_128 = amount_128 + (uint8_t)amount->content[16 + i];
     }
 
     //verify amount does not exceed 64 bit
