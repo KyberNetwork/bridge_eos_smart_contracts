@@ -136,21 +136,23 @@ ACTION Unlock::unlock(const std::vector<unsigned char>& header_rlp_vec,
     eosio_assert(memcmp(transfer_signature, function_signature, 32) == 0,
                  "function signature is not for knc transfer");
 
-    //TODO - verify amount does not exceed 64/128 bit
-    print_uint8_array(amount, 32);
-    //uint128_t *amount_uint = (uint128_t*)(amount + 16);
-
-    uint128_t t = 0;
+    // fix endianess
+    uint128_t amount_128 = 0;
     for(int i = 0; i < 16; i++){
-        t = t << 8;
-        t = t + (uint8_t)amount[16 + i];
+        amount_128 = amount_128 << 8;
+        amount_128 = amount_128 + (uint8_t)amount[16 + i];
     }
-    print("t: ", t / pow(10, 18 - s.token_symbol.precision())); //TODO: make constant/configureable
 
-    // TODO - scale and send somewhere.
-    // send eos tokens to someone
-);
+    //verify amount does not exceed 64 bit
+    uint128_t amount_128_scaled =
+        amount_128 / (uint128_t)(pow(10, 18 - s.token_symbol.precision()));
+    eosio_assert(amount_128_scaled < asset::max_amount, "amount too big");
+    uint64_t asset_amount = (uint64_t)amount_128_scaled;
 
+    // TODO - change according to recepient name in event
+    asset to_pay = asset(asset_amount, s.token_symbol);
+    async_pay(_self, "user"_n, to_pay, s.token_contract, "unlock");
+    print("done parment of: ", to_pay);
 
 }
 

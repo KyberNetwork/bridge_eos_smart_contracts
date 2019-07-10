@@ -2,6 +2,13 @@
 #include <eosiolib/print.hpp>
 #include <eosiolib/types.h>
 #include <eosiolib/crypto.h>
+#include <eosiolib/asset.hpp>
+#include <eosiolib/symbol.hpp>
+
+#include <string>
+
+using std::string;
+using namespace eosio;
 
 /* helper functions - TODO - remove in production*/
 static std::vector<unsigned char> hex_to_bytes(const std::string& hex) {
@@ -36,4 +43,13 @@ void sha256(uint8_t* ret, uint8_t* input, uint input_size) {
     capi_checksum256 csum; //TODO - change to get on input
     eosio:sha256((char *)input, input_size, &csum);
     memcpy(ret, csum.hash, 32);
+}
+
+void async_pay(name from, name to, asset quantity, name dest_contract, string memo) {
+    action {
+        permission_level{from, "active"_n},
+        dest_contract,
+        "transfer"_n,
+        std::make_tuple(from, to, quantity, memo)
+    }.send();
 }
