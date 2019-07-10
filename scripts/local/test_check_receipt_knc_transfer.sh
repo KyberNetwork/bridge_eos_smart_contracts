@@ -1,9 +1,9 @@
 set -x
 
 # test case
-#bash scripts/local/create_relay.sh 8106145
-#bash scripts/local/create_relay.sh 8106146
-#bash scripts/local/create_relay.sh 8106147
+bash scripts/local/create_relay.sh 8106145
+bash scripts/local/create_relay.sh 8106146
+bash scripts/local/create_relay.sh 8106147
 
 # deploy and set 8106145 as genesis
 bash scripts/local/deploy.sh 8106145

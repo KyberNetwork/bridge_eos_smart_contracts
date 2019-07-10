@@ -16,8 +16,8 @@ typedef unsigned int uint;
 using byte = uint8_t;
 using bytes = std::vector<byte>;
 
-byte transfer_signature[] = {0xdd, 0xf2, 0x52, 0xad, 0x1b, 0xe2, 0xc8, 0x9b, 0x69, 0xc2, 0xb0, 0x68, 0xfc, 0x37, 0x8d, 0xaa, 0x95, 0x2b, 0xa7, 0xf1, 0x63, 0xc4, 0xa1, 0x16, 0x28, 0xf5, 0x5a, 0x4d, 0xf5, 0x23, 0xb3, 0xef};
-byte knc_address[] = {0xdd, 0x97, 0x4d, 0x5c, 0x2e, 0x29, 0x28, 0xde, 0xa5, 0xf7, 0x1b, 0x98, 0x25, 0xb8, 0xb6, 0x46, 0x68, 0x6b, 0xd2, 0x00};
+byte lock_signature[] = {0xff, 0x0e, 0x8e, 0xf5, 0x8d, 0x4e, 0x45, 0x21, 0x66, 0xe4, 0x15, 0xcf, 0x3e, 0x96, 0xe0, 0x6c, 0xac, 0x94, 0x63, 0x62, 0xd8, 0xda, 0x31, 0x74, 0xea, 0xcf, 0xa8, 0xa3, 0x53, 0x59, 0xa5, 0x99};
+byte lock_contract_address[] = {0x98, 0x03, 0x58, 0x36, 0x04, 0x09, 0xb1, 0xcc, 0x91, 0x3a, 0x91, 0x6b, 0xc0, 0xbf, 0x6f, 0x52, 0xf7, 0x75, 0x24, 0x2a};
 
 // TODO - duplicated with Bridge contract, see if can moved to common place.
 struct receipts {
@@ -107,23 +107,19 @@ ACTION Unlock::unlock(const std::vector<unsigned char>& header_rlp_vec,
     decode_list((uint8_t *)&rlp_receipt[0], list, &elem_ptr);
 
     rlp_elem* logs = get_n_elem(list, 3);
-    rlp_elem* first_event = get_n_elem(logs, 0);
+    rlp_elem* event = get_n_elem(logs, 1); // second event
 
-    rlp_elem* address = get_n_elem(first_event, 0);
+    rlp_elem* address = get_n_elem(event, 0);
 
-    rlp_elem* topics = get_n_elem(first_event, 1);
+    rlp_elem* topics = get_n_elem(event, 1);
     rlp_elem* function_signature = get_n_elem(topics, 0); // 1st topic
-    rlp_elem *from = get_n_elem(topics, 1); // 2nd topic
-    rlp_elem *to = get_n_elem(topics, 2); // 3rd topic
+    rlp_elem *amount = get_n_elem(topics, 1); // 2nd topic
+    rlp_elem *eos_recipient_name = get_n_elem(topics, 2); // 3rd topic
+    rlp_elem *lock_id = get_n_elem(topics, 4); // 4th topic
 
-    // amount not indexed, so in data field
-    rlp_elem *amount = get_n_elem(first_event, 2);
-
-    //uint8_t *address = get_address(rlp_receipt, 0);
-    eosio_assert(memcmp(knc_address, address->content, 20) == 0,
+    eosio_assert(memcmp(lock_contract_address, address->content, 20) == 0,
                  "adress is not for knc contract address");
-    // parse data
-    eosio_assert(memcmp(transfer_signature, function_signature->content, 32) == 0,
+    eosio_assert(memcmp(lock_signature, function_signature->content, 32) == 0,
                  "function signature is not for knc transfer");
 
     // fix endianess
@@ -133,16 +129,28 @@ ACTION Unlock::unlock(const std::vector<unsigned char>& header_rlp_vec,
         amount_128 = amount_128 + (uint8_t)amount->content[16 + i];
     }
 
+    uint64_t eos_address_64 = 0;
+    for(int i = 0; i < 8; i++){
+        eos_address_64 = eos_address_64 << 8;
+        eos_address_64 = eos_address_64 + (uint8_t)eos_recipient_name->content[24 + i];
+    }
+    name recipient(eos_address_64);
+    eosio_assert(is_account(recipient), "recipient account does not exist");
+    print("recipient:", recipient);
+    print("\n");
+
     //verify amount does not exceed 64 bit
     uint128_t amount_128_scaled =
         amount_128 / (uint128_t)(pow(10, 18 - s.token_symbol.precision()));
     eosio_assert(amount_128_scaled < asset::max_amount, "amount too big");
     uint64_t asset_amount = (uint64_t)amount_128_scaled;
 
-    // TODO - change according to recepient name in event
+    // TODO - ***change according to recepient name in event***
     asset to_pay = asset(asset_amount, s.token_symbol);
-    async_pay(_self, "user"_n, to_pay, s.token_contract, "unlock");
-    print("done parment of: ", to_pay);
+    async_pay(_self, recipient, to_pay, s.token_contract, "unlock");
+
+    print("done payment of: ", to_pay);
+    print("\n");
 
 }
 

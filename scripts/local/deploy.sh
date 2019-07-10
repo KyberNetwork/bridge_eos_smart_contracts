@@ -14,6 +14,7 @@ EOSIO_DEV_KEY=EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV
 cleos create account eosio bridge $PUBLIC_KEY
 cleos create account eosio unlock $PUBLIC_KEY
 cleos create account eosio token $PUBLIC_KEY
+cleos create account eosio multimultixx $PUBLIC_KEY
 
 # token
 cleos set contract token contracts/Token Token.wasm --abi Token.abi -p token@active
