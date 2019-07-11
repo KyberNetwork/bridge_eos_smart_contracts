@@ -1,5 +1,3 @@
-# get json data
-
 import json
 
 def from_buffer_to_str(buffer):
@@ -32,9 +30,6 @@ with open('verifyproof_output.json') as json_file:
     else:
         padded = striped
     final_st += "encoded_path = " + from_buffer_to_str(padded)+ "\n"
-    
-with open('ethashproof_output.json') as json_file:  
-    data = json.load(json_file)
     final_st += "header_rlp_vec = " + from_buffer_to_str(data["header_rlp"])+ "\n"
 
 print(final_st)

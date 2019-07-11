@@ -1,13 +1,11 @@
-#NOTE: first need to changge the tx hash in the iteration in tests/default/receipt.js that is marked to run (it.only)
 set -x
 
 BLOCK_NUM=$1
+TX_HASH=$2
 
-cd eth-proof
-node_modules/.bin/mocha test/default/receipt.js
-cd ..
+node scripts/local/get_reciept_proof_data.js $TX_HASH
+mv verifyproof_output.json scripts/local/ 
 
-mv eth-proof/verifyproof_output.json scripts/local/ 
 cd scripts/local/
 python parse_verifyproof_output.py > verify_$BLOCK_NUM.js
 
