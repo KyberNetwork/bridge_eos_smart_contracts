@@ -8,4 +8,3 @@ cd scripts/local/
 cp relay_template.js relay_$BLOCK_NUM.js
 python parse_ethashproof_output.py >> relay_$BLOCK_NUM.js
 cd ../..
- 
