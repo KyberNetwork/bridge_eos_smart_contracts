@@ -20,7 +20,7 @@ using eosio::print;
 typedef unsigned int uint;
 
 typedef struct _rlp_item {
-    unsigned char* content;
+    uint8_t* content;
     uint  len; /* length in bytes */
 
 } rlp_item;
@@ -28,7 +28,7 @@ typedef struct _rlp_item {
 
 /*****************************************************************************/
 
-static uint decode_single_byte(unsigned char* input, rlp_item* output) {
+static uint decode_single_byte(uint8_t* input, rlp_item* output) {
     output->content = input;
     output->len = 1;
 
@@ -37,12 +37,12 @@ static uint decode_single_byte(unsigned char* input, rlp_item* output) {
 
 /*****************************************************************************/
 
-static uint decode_number(unsigned char* input, uint len) {
+static uint decode_number(uint8_t* input, uint len) {
     uint i, result;
     result = 0;
     for(i = 0 ; i < len ; i++) {
         result = result << 8;
-        result += (unsigned char)input[i];
+        result += (uint8_t)input[i];
     }
 
     return result;
@@ -50,8 +50,8 @@ static uint decode_number(unsigned char* input, uint len) {
 
 /*****************************************************************************/
 
-static uint decode_string(unsigned char* input, rlp_item* output) {
-    unsigned char first_byte = input[0];
+static uint decode_string(uint8_t* input, rlp_item* output) {
+    uint8_t first_byte = input[0];
     uint len_num_bytes;
     uint string_len;
 
@@ -73,14 +73,14 @@ static uint decode_string(unsigned char* input, rlp_item* output) {
 
 /*****************************************************************************/
 
-static void decode_list(unsigned char* input, rlp_item* outputs, uint *output_list_len) {
-    unsigned char first_byte = input[0];
+static void decode_list(uint8_t* input, rlp_item* outputs, uint *output_list_len) {
+    uint8_t first_byte = input[0];
     uint len_num_bytes;
     uint list_len;
     uint elm_ind;
     uint elm_len;
     uint outputs_ind;
-    unsigned char* current_input = input;
+    uint8_t* current_input = input;
 
     if(first_byte <= 0xf7) {
         len_num_bytes = 0;
@@ -112,7 +112,7 @@ static void decode_list(unsigned char* input, rlp_item* outputs, uint *output_li
 
 /*****************************************************************************/
 
-static uint remove_last_field_from_rlp(unsigned char* rlp, uint field_len) {
+static uint remove_last_field_from_rlp(uint8_t* rlp, uint field_len) {
     uint field_len_field_len;
     uint rlp_org_len;
     uint rlp_final_len;
@@ -149,7 +149,7 @@ uint64_t get_uint64(rlp_item* item) {
     uint64_t result = 0;
     for(int i = 0 ; i < item->len ; i++) {
         result = result << 8;
-        result += (unsigned char)item->content[i];
+        result += (uint8_t)item->content[i];
     }
     return result;
 }

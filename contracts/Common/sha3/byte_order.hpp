@@ -30,7 +30,7 @@
 unsigned rhash_ctz(unsigned x)
 {
 	unsigned long index;
-	unsigned char isNonzero = _BitScanForward(&index, x); /* MSVC intrinsic */
+	uint8_t isNonzero = _BitScanForward(&index, x); /* MSVC intrinsic */
 	return (isNonzero ? (unsigned)index : 0);
 }
 #  else /* _MSC_VER >= 1300... */
@@ -45,7 +45,7 @@ unsigned rhash_ctz(unsigned x)
 unsigned rhash_ctz(unsigned x)
 {
 	/* array for conversion to bit position */
-	static unsigned char bit_pos[32] =  {
+	static uint8_t bit_pos[32] =  {
 		0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8,
 		31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9
 	};

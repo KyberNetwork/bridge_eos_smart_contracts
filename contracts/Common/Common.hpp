@@ -4,26 +4,33 @@
 #include <eosiolib/crypto.h>
 #include <eosiolib/asset.hpp>
 #include <eosiolib/symbol.hpp>
+#include <eosiolib/singleton.hpp>
+
+#include "sha3/sha3.hpp"
 
 #include <string>
+#include <vector>
 
 using std::string;
+using std::vector;
 using namespace eosio;
 
+typedef unsigned int uint;
+
 /* helper functions - TODO - remove in production*/
-static std::vector<unsigned char> hex_to_bytes(const std::string& hex) {
-    std::vector<unsigned char> bytes;
+static vector<uint8_t> hex_to_bytes(const std::string& hex) {
+    vector<uint8_t> bytes;
 
     for (unsigned int i = 0; i < hex.length(); i += 2) {
             std::string byteString = hex.substr(i, 2);
-            unsigned char byte = (unsigned char) strtol(byteString.c_str(), NULL, 16);
+            uint8_t byte = (uint8_t) strtol(byteString.c_str(), NULL, 16);
             bytes.push_back(byte);
     }
     return bytes;
 }
 
 void hex_to_arr(const std::string& hex, uint8_t *arr) {
-    std::vector<unsigned char> bytes = hex_to_bytes(hex);
+    vector<uint8_t> bytes = hex_to_bytes(hex);
     std::copy(bytes.begin(), bytes.end(), arr);
 }
 

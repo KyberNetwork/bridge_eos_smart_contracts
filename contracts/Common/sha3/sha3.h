@@ -39,10 +39,10 @@ void rhash_sha3_256_init(sha3_ctx *ctx);
 void rhash_sha3_384_init(sha3_ctx *ctx);
 void rhash_sha3_512_init(sha3_ctx *ctx);
 
-void rhash_keccak_final(sha3_ctx *ctx, unsigned char* result);
+void rhash_keccak_final(sha3_ctx *ctx, uint8_t* result);
 
-void rhash_sha3_update(sha3_ctx *ctx, const unsigned char* msg, size_t size);
-void rhash_sha3_final(sha3_ctx *ctx, unsigned char* result);
+void rhash_sha3_update(sha3_ctx *ctx, const uint8_t* msg, size_t size);
+void rhash_sha3_final(sha3_ctx *ctx, uint8_t* result);
 
 #ifdef USE_KECCAK
 #define rhash_keccak_224_init rhash_sha3_224_init

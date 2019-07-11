@@ -19,7 +19,7 @@
 
 #define USE_KECCAK
 
-#include <string.h>
+#include <string>
 #include "../sha3/byte_order.hpp"
 #include "../sha3/sha3.h"
 
@@ -267,7 +267,7 @@ static void rhash_sha3_process_block(uint64_t hash[25], const uint64_t *block, s
  * @param msg message chunk
  * @param size length of the message chunk
  */
-void rhash_sha3_update(sha3_ctx *ctx, const unsigned char *msg, size_t size)
+void rhash_sha3_update(sha3_ctx *ctx, const uint8_t *msg, size_t size)
 {
 	size_t index = (size_t)ctx->rest;
 	size_t block_size = (size_t)ctx->block_size;
@@ -312,7 +312,7 @@ void rhash_sha3_update(sha3_ctx *ctx, const unsigned char *msg, size_t size)
  * @param ctx the algorithm context containing current hashing state
  * @param result calculated hash in binary form
  */
-void rhash_sha3_final(sha3_ctx *ctx, unsigned char* result)
+void rhash_sha3_final(sha3_ctx *ctx, uint8_t* result)
 {
 	size_t digest_length = 100 - ctx->block_size / 2;
 	const size_t block_size = ctx->block_size;
@@ -340,7 +340,7 @@ void rhash_sha3_final(sha3_ctx *ctx, unsigned char* result)
 * @param ctx the algorithm context containing current hashing state
 * @param result calculated hash in binary form
 */
-void rhash_keccak_final(sha3_ctx *ctx, unsigned char* result)
+void rhash_keccak_final(sha3_ctx *ctx, uint8_t* result)
 {
 	size_t digest_length = 100 - ctx->block_size / 2;
 	const size_t block_size = ctx->block_size;
@@ -361,14 +361,14 @@ void rhash_keccak_final(sha3_ctx *ctx, unsigned char* result)
 	if (result) me64_to_le_str(result, ctx->hash, digest_length);
 }
 
-void keccak256(uint8_t* ret, uint8_t* input, uint input_size) {
+void keccak256(uint8_t* ret, uint8_t* input, uint64_t input_size) {
     sha3_ctx shactx;
     rhash_keccak_256_init(&shactx);
     rhash_keccak_update(&shactx, input, input_size);
     rhash_keccak_final(&shactx, ret);
 }
 
-void keccak512(uint8_t* ret, uint8_t* input, uint input_size) {
+void keccak512(uint8_t* ret, uint8_t* input, uint64_t input_size) {
     sha3_ctx shactx;
     rhash_keccak_512_init(&shactx);
     rhash_keccak_update(&shactx, input, input_size);

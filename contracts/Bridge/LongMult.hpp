@@ -1,13 +1,13 @@
 #include <eosiolib/print.hpp>
 using eosio::print;
 
-static unsigned __int128 decode_number128(unsigned char* input, unsigned int len) {
+static unsigned __int128 decode_number128(uint8_t* input, unsigned int len) {
     unsigned int i;
     unsigned __int128 result;
     result = 0;
     for(i = 0 ; i < len ; i++) {
         result = result << 8;
-        result += (unsigned char)input[i];
+        result += (uint8_t)input[i];
     }
 
     return result;
@@ -15,9 +15,9 @@ static unsigned __int128 decode_number128(unsigned char* input, unsigned int len
 
 /*****************************************************************************/
 
-static int check_pow(unsigned char* difficulty,
+static int check_pow(uint8_t* difficulty,
              unsigned int difficulty_len,
-             unsigned char* ethash) {
+             uint8_t* ethash) {
 
     unsigned __int128 difficulty_value = decode_number128(difficulty, difficulty_len);
     unsigned __int128 ethash_value[4];

@@ -1,6 +1,6 @@
 #include "Token.hpp"
 
-namespace eosio {
+using namespace eosio;
 
 ACTION Token::create(name issuer, asset maximum_supply) {
     require_auth(_self);
@@ -96,6 +96,4 @@ void Token::add_balance(name owner, asset value, name ram_payer) {
     }
 }
 
-} /// namespace eosio
-
-EOSIO_DISPATCH(eosio::Token, (create)(issue)(transfer))
+EOSIO_DISPATCH(Token, (create)(issue)(transfer))

@@ -4,11 +4,7 @@
 #include <eosiolib/eosio.hpp>
 #include <string>
 
-namespace eosiosystem {
-    class system_contract;
-}
-
-namespace eosio {
+using namespace eosio;
 using std::string;
 
 CONTRACT Token : public contract {
@@ -58,5 +54,3 @@ CONTRACT Token : public contract {
         void sub_balance(name owner, asset value);
         void add_balance(name owner, asset value, name ram_payer);
 };
-
-} /// namespace eosio

@@ -1,23 +1,10 @@
-#include <eosiolib/eosio.hpp>
-#include <eosiolib/print.hpp>
-#include <eosiolib/types.h>
-#include <eosiolib/crypto.h>
-#include <eosiolib/singleton.hpp>
-typedef unsigned int uint;
-
 #include <math.h>
-#include <string.h>
-#include <vector>
 
-#include "../Common/sha3/sha3.hpp"
 #include "../Common/Common.hpp"
 #include "../Common/NestedRlp.hpp"
 
-using byte = uint8_t;
-using bytes = std::vector<byte>;
-
-byte lock_signature[] = {0xff, 0x0e, 0x8e, 0xf5, 0x8d, 0x4e, 0x45, 0x21, 0x66, 0xe4, 0x15, 0xcf, 0x3e, 0x96, 0xe0, 0x6c, 0xac, 0x94, 0x63, 0x62, 0xd8, 0xda, 0x31, 0x74, 0xea, 0xcf, 0xa8, 0xa3, 0x53, 0x59, 0xa5, 0x99};
-byte lock_contract_address[] = {0x98, 0x03, 0x58, 0x36, 0x04, 0x09, 0xb1, 0xcc, 0x91, 0x3a, 0x91, 0x6b, 0xc0, 0xbf, 0x6f, 0x52, 0xf7, 0x75, 0x24, 0x2a};
+uint8_t lock_signature[] = {0xff, 0x0e, 0x8e, 0xf5, 0x8d, 0x4e, 0x45, 0x21, 0x66, 0xe4, 0x15, 0xcf, 0x3e, 0x96, 0xe0, 0x6c, 0xac, 0x94, 0x63, 0x62, 0xd8, 0xda, 0x31, 0x74, 0xea, 0xcf, 0xa8, 0xa3, 0x53, 0x59, 0xa5, 0x99};
+uint8_t lock_contract_address[] = {0x98, 0x03, 0x58, 0x36, 0x04, 0x09, 0xb1, 0xcc, 0x91, 0x3a, 0x91, 0x6b, 0xc0, 0xbf, 0x6f, 0x52, 0xf7, 0x75, 0x24, 0x2a};
 
 // TODO - duplicated with Bridge contract, see if can moved to common place.
 struct receipts {
@@ -27,7 +14,7 @@ struct receipts {
 };
 typedef eosio::multi_index<"receipts"_n, receipts> receipts_type;
 
-using namespace eosio;
+
 CONTRACT Unlock : public contract {
 
     public:
@@ -37,8 +24,8 @@ CONTRACT Unlock : public contract {
                       symbol token_symbol,
                       name bridge_contract);
 
-        ACTION unlock(const std::vector<unsigned char>& header_rlp_vec,
-                      const std::vector<unsigned char>& rlp_receipt);
+        ACTION unlock(const vector<uint8_t>& header_rlp_vec,
+                      const vector<uint8_t>& rlp_receipt);
 
         TABLE state {
             name            token_contract;
@@ -62,19 +49,19 @@ ACTION Unlock::config(name token_contract,
     state_inst.set(s, _self);
 }
 
-ACTION Unlock::unlock(const std::vector<unsigned char>& header_rlp_vec,
-                      const std::vector<unsigned char>& rlp_receipt) {
+ACTION Unlock::unlock(const vector<uint8_t>& header_rlp_vec,
+                      const vector<uint8_t>& rlp_receipt) {
 
     state_type state_inst(_self, _self.value);
     auto s = state_inst.get();
 
     // calculate sealed header hash
     uint8_t header_hash_arr[32];
-    keccak256(header_hash_arr, (unsigned char *)header_rlp_vec.data(), header_rlp_vec.size());
+    keccak256(header_hash_arr, (uint8_t *)header_rlp_vec.data(), header_rlp_vec.size());
     uint64_t header_hash = *((uint64_t*)header_hash_arr);
 
     // create vector from header_hash_arr
-    std::vector<uint8_t> header_hash_vec(header_hash_arr, header_hash_arr + 32);
+    vector<uint8_t> header_hash_vec(header_hash_arr, header_hash_arr + 32);
 
     // verify longest path
     action {permission_level{_self, "active"_n},
@@ -139,7 +126,7 @@ ACTION Unlock::unlock(const std::vector<unsigned char>& header_rlp_vec,
     print("recipient:", recipient);
     print("\n");
 
-    //verify amount does not exceed 64 bit
+    // verify amount does not exceed 64 bit
     uint128_t amount_128_scaled =
         amount_128 / (uint128_t)(pow(10, 18 - s.token_symbol.precision()));
     eosio_assert(amount_128_scaled < asset::max_amount, "amount too big");
@@ -160,9 +147,7 @@ ACTION Unlock::unlock(const std::vector<unsigned char>& header_rlp_vec,
 }
 
 extern "C" {
-
     void apply(uint64_t receiver, uint64_t code, uint64_t action) {
-
         if (code == receiver){
             switch( action ) {
                 EOSIO_DISPATCH_HELPER( Unlock, (config)(unlock))

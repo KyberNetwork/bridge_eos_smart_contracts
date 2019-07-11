@@ -1,18 +1,6 @@
-#define VERIFY true
-
-#include <eosiolib/eosio.hpp>
-#include <eosiolib/print.hpp>
-#include <eosiolib/types.h>
-#include <eosiolib/singleton.hpp>
-typedef unsigned int uint;
-
-#include <string.h>
-#include <vector>
-
-#include "DataSizes.h"
-#include "../Common/sha3/sha3.hpp"
-#include "../Common/Rlp.hpp"
 #include "../Common/Common.hpp"
+#include "../Common/Rlp.hpp"
+#include "DataSizes.h"
 #include "LongMult.hpp"
 #include "MerklePatriciaProof.hpp"
 
@@ -29,14 +17,8 @@ typedef unsigned int uint;
 
 #define FNV_PRIME 0x01000193
 
-#define MAX_PROOF_DEPTH 40
-
-#define fix_endian32(dst_ ,src_) dst_ = src_
-#define fix_endian32_same(val_)
-#define fix_endian64(dst_, src_) dst_ = src_
-#define fix_endian64_same(val_)
-#define fix_endian_arr32(arr_, size_)
-#define fix_endian_arr64(arr_, size_)
+using namespace eosio;
+using std::vector;
 
 typedef union node {
     uint8_t bytes[NODE_WORDS * 4];
@@ -56,28 +38,30 @@ struct header_info_struct {
     uint difficulty_len;
 };
 
-using namespace eosio;
+static uint64_t* dag_sizes_array[] = {dag_sizes_0, dag_sizes_1, dag_sizes_2,
+                                      dag_sizes_3, dag_sizes_4};
+
 CONTRACT Bridge : public contract {
 
     public:
         using contract::contract;
 
-        ACTION relay(const std::vector<unsigned char>& header_rlp_vec,
-                      const std::vector<unsigned char>& dag_vec,
-                      const std::vector<unsigned char>& proof_vec,
-                      uint proof_length);
+        ACTION relay(const vector<uint8_t>& header_rlp_vec,
+                     const vector<uint8_t>& dag_vec,
+                     const vector<uint8_t>& proof_vec,
+                     uint proof_length);
 
-        ACTION veriflongest(const std::vector<unsigned char>& header_hash);
+        ACTION veriflongest(const vector<uint8_t>& header_hash);
 
-        ACTION checkreceipt(const std::vector<unsigned char>& header_rlp_vec,
-                            const std::vector<unsigned char>& encoded_path,
-                            const std::vector<unsigned char>& rlp_receipt, // value
-                            const std::vector<unsigned char>& all_parent_nodes_rlps,
-                            const std::vector<uint>& all_parnet_rlp_sizes);
+        ACTION checkreceipt(const vector<uint8_t>& header_rlp_vec,
+                            const vector<uint8_t>& encoded_path,
+                            const vector<uint8_t>& rlp_receipt, // value
+                            const vector<uint8_t>& all_parent_nodes_rlps,
+                            const vector<uint>& all_parnet_rlp_sizes);
 
         ACTION storeroots(uint64_t genesis_block_num,
-                          const std::vector<uint64_t>& epoch_num_vec,
-                          const std::vector<unsigned char>& root_vec);
+                          const vector<uint64_t>& epoch_num_vec,
+                          const vector<uint8_t>& root_vec);
 
         TABLE state {
             uint64_t        headers_head;
@@ -88,7 +72,7 @@ CONTRACT Bridge : public contract {
 
         TABLE roots {
             uint64_t                     epoch_num;
-            std::vector<unsigned char>   root;
+            vector<uint8_t>   root;
             uint64_t        primary_key() const { return epoch_num; }
         };
 
@@ -98,7 +82,7 @@ CONTRACT Bridge : public contract {
             uint64_t    previous_hash;
             uint128_t   total_difficulty;
             uint64_t    block_num;
-            std::vector<uint64_t> receipt_hashes; // only 8B out of the hash
+            vector<uint64_t> receipt_hashes; // only 8B out of the hash
             uint64_t primary_key() const { return header_hash; }
         };
 
@@ -116,7 +100,7 @@ CONTRACT Bridge : public contract {
 
     private:
         void parse_header(struct header_info_struct* header_info,
-                          const std::vector<unsigned char>& header_rlp_vec);
+                          const vector<uint8_t>& header_rlp_vec);
         void store_header(struct header_info_struct* header_info);
 };
 
@@ -132,26 +116,7 @@ uint64_t ethash_get_datasize(uint64_t const block_num)
     int array_num = index / EPOCH_SINGLE_ARRAY_SIZE;
     int index_in_array = index % EPOCH_SINGLE_ARRAY_SIZE;
 
-    uint64_t* array;
-    switch (array_num) {
-        case 0:
-            array = dag_sizes_0;
-            break;
-        case 1:
-            array = dag_sizes_1;
-            break;
-        case 2:
-            array = dag_sizes_2;
-            break;
-        case 3:
-            array = dag_sizes_3;
-            break;
-        case 4:
-            array = dag_sizes_4;
-            break;
-    }
-
-    return array[index_in_array];
+    return dag_sizes_array[array_num][index_in_array];
 }
 
 void reverseBytes(uint8_t *ret, uint8_t *data, uint size) {
@@ -172,7 +137,7 @@ void merkle_element_hash(uint8_t *ret, uint8_t *data){
   uint8_t conventional[MERKLE_CONVENTIONAL_LEN];
   merkle_conventional_encoding(conventional, data);
 
-  unsigned char tmp[32];
+  uint8_t tmp[32];
   sha256(tmp, conventional, 128);
   memcpy(ret, tmp + 16, 16); // last 16 bytes
   return;
@@ -184,7 +149,7 @@ void merkle_hash_siblings(uint8_t *ret, uint8_t *a, uint8_t *b){
     memcpy(padded_pair + 48, a, 16);
     memcpy(padded_pair + 16, b, 16);
 
-    unsigned char tmp[32];
+    uint8_t tmp[32];
     sha256(tmp, padded_pair, 64);
     memcpy(ret, tmp + 16, 16); // last 16 bytes
     return;
@@ -217,8 +182,8 @@ void merkle_apply_path(uint index,
 }
 
 void verify_header(struct header_info_struct* header_info,
-                   const std::vector<unsigned char>& dag_vec,
-                   const std::vector<unsigned char>& proof_vec,
+                   const vector<uint8_t>& dag_vec,
+                   const vector<uint8_t>& proof_vec,
                    uint proof_length) {
 
     uint8_t *header_hash = header_info->unsealed_header_hash;
@@ -239,15 +204,14 @@ void verify_header(struct header_info_struct* header_info,
     memset(s_mix[2].bytes, 0, 64);
 
     memcpy(s_mix[0].bytes, header_hash, 32);
-    fix_endian64(s_mix[0].double_words[4], nonce);
+    s_mix[0].double_words[4] = nonce;
 
     // compute sha3-512 hash and replicate across mix
 
-    unsigned char res[64] = {0};
+    uint8_t res[64] = {0};
     keccak512(res, s_mix->bytes, 40);
     memcpy(s_mix->bytes, res, 64);
 
-    fix_endian_arr32(s_mix[0].words, 16);
     node* const mix = s_mix + 1;
     for (uint32_t w = 0; w != MIX_WORDS; ++w) {
         mix->words[w] = s_mix[0].words[w % NODE_WORDS];
@@ -260,15 +224,15 @@ void verify_header(struct header_info_struct* header_info,
 
         uint32_t const index = fnv_hash(s_mix->words[0] ^ i, mix->words[i % MIX_WORDS]) % num_full_pages;
 
-        if(VERIFY && i < 64) {
-            uint8_t res[MERKLE_ELEMENT_LEN];
-            uint8_t *current_item = (uint8_t *)(&dag_vec[i * NODE_BYTES * 2]);
-            uint8_t *proofs_start = (uint8_t *)(&proof_vec[i * proof_length * MERKLE_ELEMENT_LEN]);
+        // dag elements verification
+        uint8_t res[MERKLE_ELEMENT_LEN];
+        uint8_t *current_item = (uint8_t *)(&dag_vec[i * NODE_BYTES * 2]);
+        uint8_t *proofs_start = (uint8_t *)(&proof_vec[i * proof_length * MERKLE_ELEMENT_LEN]);
 
-            merkle_apply_path(index, res, current_item, proofs_start, proof_length);
-            eosio_assert(0 == memcmp(res, expected_root, MERKLE_ELEMENT_LEN),
-                         "merkle verification failure");
-        }
+        merkle_apply_path(index, res, current_item, proofs_start, proof_length);
+        eosio_assert(0 == memcmp(res, expected_root, MERKLE_ELEMENT_LEN),
+                     "dag elements merkle verification failure");
+
         for (unsigned n = 0; n != MIX_NODES; ++n) {
 
             uint32_t *current_item_word = (uint32_t *)(&dag_vec[NODE_BYTES * (i * 2 + n)]);
@@ -287,10 +251,8 @@ void verify_header(struct header_info_struct* header_info,
         mix->words[w / 4] = reduction;
     }
 
-    fix_endian_arr32(mix->words, MIX_WORDS / 4);
-
     // final Keccak hash
-    unsigned char ethash[32] = {0};
+    uint8_t ethash[32] = {0};
     keccak256(ethash, s_mix->bytes, 64 + 32);
 
     print("ethash: ");
@@ -306,29 +268,29 @@ void verify_header(struct header_info_struct* header_info,
 }
 
 void hash_header_rlp(struct header_info_struct* header_info,
-                     const std::vector<unsigned char>& header_rlp_vec,
+                     const vector<uint8_t>& header_rlp_vec,
                      rlp_item* items) {
 
     // calculate sealed header hash
-    keccak256(header_info->header_hash, (unsigned char *)header_rlp_vec.data(), header_rlp_vec.size());
+    keccak256(header_info->header_hash, (uint8_t *)header_rlp_vec.data(), header_rlp_vec.size());
 
     // calculate unsealed header hash (w/o nonce and mixed fields).
-    int trim_len = remove_last_field_from_rlp((unsigned char *)header_rlp_vec.data(),
+    int trim_len = remove_last_field_from_rlp((uint8_t *)header_rlp_vec.data(),
                                               items[NONCE_FIELD].len);
     eosio_assert(trim_len == (header_rlp_vec.size() - 9), "wrong 1st trim length");
 
-    trim_len = remove_last_field_from_rlp((unsigned char *)header_rlp_vec.data(),
+    trim_len = remove_last_field_from_rlp((uint8_t *)header_rlp_vec.data(),
                                           items[MIX_HASH_FIELD].len);
     eosio_assert(trim_len == (header_rlp_vec.size() - 42), "wrong 2nd trim length");
 
-    keccak256(header_info->unsealed_header_hash, (unsigned char *)header_rlp_vec.data(), trim_len);
+    keccak256(header_info->unsealed_header_hash, (uint8_t *)header_rlp_vec.data(), trim_len);
 }
 
 void Bridge::parse_header(struct header_info_struct* header_info,
-                          const std::vector<unsigned char>& header_rlp_vec) {
+                          const vector<uint8_t>& header_rlp_vec) {
     rlp_item items[15];
     uint num_items;
-    decode_list((unsigned char *)header_rlp_vec.data(), items, &num_items);
+    decode_list((uint8_t *)header_rlp_vec.data(), items, &num_items);
 
     header_info->nonce = get_uint64(&items[NONCE_FIELD]);
     header_info->block_num = get_uint64(&items[NUMBER_FIELD]);
@@ -398,7 +360,7 @@ void Bridge::store_header(struct header_info_struct* header_info) {
     }
 }
 
-ACTION Bridge::veriflongest(const std::vector<unsigned char>& header_hash) {
+ACTION Bridge::veriflongest(const vector<uint8_t>& header_hash) {
     state_type state_inst(_self, _self.value);
     headers_type headers_inst(_self, _self.value);
 
@@ -424,8 +386,8 @@ ACTION Bridge::veriflongest(const std::vector<unsigned char>& header_hash) {
 }
 
 ACTION Bridge::storeroots(uint64_t genesis_block_num,
-                          const std::vector<uint64_t>& epoch_num_vec,
-                          const std::vector<unsigned char>& root_vec){
+                          const vector<uint64_t>& epoch_num_vec,
+                          const vector<uint8_t>& root_vec){
 
     require_auth(_self);
 
@@ -463,9 +425,9 @@ ACTION Bridge::storeroots(uint64_t genesis_block_num,
     }
 };
 
-ACTION Bridge::relay(const std::vector<unsigned char>& header_rlp_vec,
-                     const std::vector<unsigned char>& dag_vec,
-                     const std::vector<unsigned char>& proof_vec,
+ACTION Bridge::relay(const vector<uint8_t>& header_rlp_vec,
+                     const vector<uint8_t>& dag_vec,
+                     const vector<uint8_t>& proof_vec,
                      uint proof_length) {
 
     struct header_info_struct header_info;
@@ -477,11 +439,11 @@ ACTION Bridge::relay(const std::vector<unsigned char>& header_rlp_vec,
 }
 
 
-ACTION Bridge::checkreceipt(const std::vector<unsigned char>& header_rlp_vec,
-                            const std::vector<unsigned char>& encoded_path,
-                            const std::vector<unsigned char>& rlp_receipt, // value
-                            const std::vector<unsigned char>& all_parent_nodes_rlps,
-                            const std::vector<uint>& all_parnet_rlp_sizes) {
+ACTION Bridge::checkreceipt(const vector<uint8_t>& header_rlp_vec,
+                            const vector<uint8_t>& encoded_path,
+                            const vector<uint8_t>& rlp_receipt, // value
+                            const vector<uint8_t>& all_parent_nodes_rlps,
+                            const vector<uint>& all_parnet_rlp_sizes) {
     struct header_info_struct header_info;
     parse_header(&header_info, header_rlp_vec);
 
@@ -522,9 +484,7 @@ ACTION Bridge::checkreceipt(const std::vector<unsigned char>& header_rlp_vec,
 }
 
 extern "C" {
-
     void apply(uint64_t receiver, uint64_t code, uint64_t action) {
-
         if (code == receiver){
             switch( action ) {
                 EOSIO_DISPATCH_HELPER( Bridge, (relay)(checkreceipt)(storeroots))
