@@ -19,8 +19,7 @@ cleos create account eosio multimultixx $PUBLIC_KEY
 # token
 cleos set contract token contracts/Token Token.wasm --abi Token.abi -p token@active
 cleos set account permission token active "{\"threshold\": 1, \"keys\":[{\"key\":\"$PUBLIC_KEY\", \"weight\":1}] , \"accounts\":[{\"permission\":{\"actor\":\"token\",\"permission\":\"eosio.code\"},\"weight\":1}], \"waits\":[] }" owner -p token@active
-cleos push action token create '[ "eosio", "1000000000.0000 WATER"]'  -p token@active
-cleos push action token issue  '[ "unlock", "7.0000 WATER", "" ]' -p eosio@active
+cleos push action token create '[ "unlock", "1000000000.0000 WATER"]'  -p token@active
 
 # bridge
 cleos set contract bridge contracts/Bridge Bridge.wasm --abi Bridge.abi -p bridge@active

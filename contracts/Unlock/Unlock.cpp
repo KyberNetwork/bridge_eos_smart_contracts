@@ -145,11 +145,16 @@ ACTION Unlock::unlock(const std::vector<unsigned char>& header_rlp_vec,
     eosio_assert(amount_128_scaled < asset::max_amount, "amount too big");
     uint64_t asset_amount = (uint64_t)amount_128_scaled;
 
-    // TODO - ***change according to recepient name in event***
-    asset to_pay = asset(asset_amount, s.token_symbol);
-    async_pay(_self, recipient, to_pay, s.token_contract, "unlock");
+    asset to_issue = asset(asset_amount, s.token_symbol);
 
-    print("done payment of: ", to_pay);
+    action {
+        permission_level{_self, "active"_n},
+        s.token_contract,
+        "issue"_n,
+        std::make_tuple(recipient, to_issue, string("issued tokens from waterloo"))
+    }.send();
+
+    print("done issuing of: ", to_issue);
     print("\n");
 
 }

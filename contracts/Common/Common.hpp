@@ -44,12 +44,3 @@ void sha256(uint8_t* ret, uint8_t* input, uint input_size) {
     eosio:sha256((char *)input, input_size, &csum);
     memcpy(ret, csum.hash, 32);
 }
-
-void async_pay(name from, name to, asset quantity, name dest_contract, string memo) {
-    action {
-        permission_level{from, "active"_n},
-        dest_contract,
-        "transfer"_n,
-        std::make_tuple(from, to, quantity, memo)
-    }.send();
-}
