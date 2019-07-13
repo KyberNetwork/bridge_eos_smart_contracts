@@ -18,18 +18,18 @@ using namespace eosio;
 typedef unsigned int uint;
 
 /* helper functions - TODO - remove in production*/
-static vector<uint8_t> hex_to_bytes(const std::string& hex) {
+static vector<uint8_t> hex_to_bytes(const string& hex) {
     vector<uint8_t> bytes;
 
     for (unsigned int i = 0; i < hex.length(); i += 2) {
-            std::string byteString = hex.substr(i, 2);
+            string byteString = hex.substr(i, 2);
             uint8_t byte = (uint8_t) strtol(byteString.c_str(), NULL, 16);
             bytes.push_back(byte);
     }
     return bytes;
 }
 
-void hex_to_arr(const std::string& hex, uint8_t *arr) {
+void hex_to_arr(const string& hex, uint8_t *arr) {
     vector<uint8_t> bytes = hex_to_bytes(hex);
     std::copy(bytes.begin(), bytes.end(), arr);
 }
