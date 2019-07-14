@@ -29,13 +29,13 @@ typedef union node {
 struct header_info_struct {
     uint64_t nonce;
     uint64_t block_num;
-    uint8_t unsealed_header_hash[32];
-    uint8_t header_hash[32];
     uint8_t *previous_hash;
     uint8_t *expected_root;
     uint8_t *difficulty;
-    uint8_t *receipt_root;
     uint difficulty_len;
+    uint8_t *receipt_root;
+    capi_checksum256 unsealed_header_hash;
+    capi_checksum256 header_hash;
 };
 
 static uint64_t* dag_sizes_array[] = {dag_sizes_0, dag_sizes_1, dag_sizes_2,
@@ -137,9 +137,8 @@ void merkle_element_hash(uint8_t *ret, uint8_t *data){
   uint8_t conventional[MERKLE_CONVENTIONAL_LEN];
   merkle_conventional_encoding(conventional, data);
 
-  uint8_t tmp[32];
-  sha256(tmp, conventional, 128);
-  memcpy(ret, tmp + 16, 16); // last 16 bytes
+  capi_checksum256 tmp = sha256(conventional, 128);
+  memcpy(ret, tmp.hash + 16, 16); // last 16 bytes
   return;
 }
 
@@ -149,9 +148,8 @@ void merkle_hash_siblings(uint8_t *ret, uint8_t *a, uint8_t *b){
     memcpy(padded_pair + 48, a, 16);
     memcpy(padded_pair + 16, b, 16);
 
-    uint8_t tmp[32];
-    sha256(tmp, padded_pair, 64);
-    memcpy(ret, tmp + 16, 16); // last 16 bytes
+    capi_checksum256 tmp = sha256(padded_pair, 64);
+    memcpy(ret, tmp.hash + 16, 16); // last 16 bytes
     return;
 }
 
@@ -186,7 +184,7 @@ void verify_header(struct header_info_struct* header_info,
                    const vector<uint8_t>& proof_vec,
                    uint proof_length) {
 
-    uint8_t *header_hash = header_info->unsealed_header_hash;
+    uint8_t *header_hash = header_info->unsealed_header_hash.hash;
     uint64_t const nonce = header_info->nonce;
     uint64_t block_num = header_info->block_num;
     uint8_t *expected_root = header_info->expected_root;
@@ -208,7 +206,7 @@ void verify_header(struct header_info_struct* header_info,
 
     // compute sha3-512 hash and replicate across mix
 
-    uint8_t res[64] = {0};
+    uint8_t res[64];
     keccak512(res, s_mix->bytes, 40);
     memcpy(s_mix->bytes, res, 64);
 
@@ -252,17 +250,16 @@ void verify_header(struct header_info_struct* header_info,
     }
 
     // final Keccak hash
-    uint8_t ethash[32] = {0};
-    keccak256(ethash, s_mix->bytes, 64 + 32);
+    capi_checksum256 ethash= keccak256(s_mix->bytes, 64 + 32);
 
     print("ethash: ");
-    print_uint8_array(ethash, 32);
+    print_uint8_array(ethash.hash, 32);
 
     print("mixed_hash: ");
     print_uint8_array(mix->bytes, 32);
 
     //check ethash result meets the rquire difficulty
-    eosio_assert(check_pow(difficulty, difficulty_len, ethash), "pow difficulty failure");
+    eosio_assert(check_pow(difficulty, difficulty_len, ethash.hash), "pow difficulty failure");
 
     return;
 }
@@ -272,7 +269,7 @@ void hash_header_rlp(struct header_info_struct* header_info,
                      rlp_item* items) {
 
     // calculate sealed header hash
-    keccak256(header_info->header_hash, (uint8_t *)header_rlp_vec.data(), header_rlp_vec.size());
+    header_info->header_hash = keccak256(header_rlp_vec.data(), header_rlp_vec.size());
 
     // calculate unsealed header hash (w/o nonce and mixed fields).
     int trim_len = remove_last_field_from_rlp((uint8_t *)header_rlp_vec.data(),
@@ -283,7 +280,7 @@ void hash_header_rlp(struct header_info_struct* header_info,
                                           items[MIX_HASH_FIELD].len);
     eosio_assert(trim_len == (header_rlp_vec.size() - 42), "wrong 2nd trim length");
 
-    keccak256(header_info->unsealed_header_hash, (uint8_t *)header_rlp_vec.data(), trim_len);
+    header_info->unsealed_header_hash = keccak256(header_rlp_vec.data(), trim_len);
 }
 
 void Bridge::parse_header(struct header_info_struct* header_info,
@@ -311,7 +308,7 @@ void Bridge::store_header(struct header_info_struct* header_info) {
     state_type state_inst(_self, _self.value);
     headers_type headers_inst(_self, _self.value);
 
-    uint64_t header_hash = *((uint64_t*)header_info->header_hash);
+    uint64_t header_hash = *((uint64_t*)header_info->header_hash.hash);
     uint64_t previous_hash = *((uint64_t*)header_info->previous_hash);
     uint64_t block_num = header_info->block_num;
 
@@ -455,28 +452,18 @@ ACTION Bridge::checkreceipt(const vector<uint8_t>& header_rlp_vec,
                  "failed receipt patricia trie verification"
     );
 
-    // store combined sha256 of (sha256(receipt rlp),header hash)
-    uint8_t rlp_receipt_hash[32];
-    sha256(rlp_receipt_hash, (uint8_t *)&rlp_receipt[0], rlp_receipt.size());
-
-    uint8_t combined_hash_input[64];
-    memcpy(combined_hash_input, header_info.header_hash, 32);
-    memcpy(combined_hash_input + 32, rlp_receipt_hash, 32);
-
-    uint8_t combined_hash_output[32];
-    sha256(combined_hash_output, combined_hash_input, 64);
-    uint64_t *receipt_header_hash = (uint64_t *)combined_hash_output;
+    uint64_t receipt_header_hash = get_reciept_header_hash(rlp_receipt, header_info.header_hash);
 
     receipts_type receipts_inst(_self, _self.value);
-    auto itr = receipts_inst.find(*receipt_header_hash);
+    auto itr = receipts_inst.find(receipt_header_hash);
     bool exists = (itr != receipts_inst.end());
     if (!exists) {
         receipts_inst.emplace(_self, [&](auto& s) {
-            s.receipt_header_hash = *receipt_header_hash;
+            s.receipt_header_hash = receipt_header_hash;
         });
     } else {
         receipts_inst.modify(itr, _self, [&](auto& s) {
-            s.receipt_header_hash = *receipt_header_hash;
+            s.receipt_header_hash = receipt_header_hash;
         });
     }
 

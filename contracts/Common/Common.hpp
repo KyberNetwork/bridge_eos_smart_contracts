@@ -45,9 +45,24 @@ void print_uint8_array(uint8_t *arr, uint size){
 }
 /* end of helper functions */
 
+capi_checksum256 sha256(const uint8_t* input, uint input_size) {
+    capi_checksum256 ret;
+    eosio:sha256((char *)input, input_size, &ret);
+    return ret;
+}
 
-void sha256(uint8_t* ret, uint8_t* input, uint input_size) {
-    capi_checksum256 csum; //TODO - change to get on input
-    eosio:sha256((char *)input, input_size, &csum);
-    memcpy(ret, csum.hash, 32);
+uint64_t get_reciept_header_hash(const vector<uint8_t> &rlp_receipt,
+                                 capi_checksum256 &header_hash) {
+
+    // get combined sha256 of (sha256(receipt rlp),header hash)
+    capi_checksum256 rlp_receipt_hash = sha256(rlp_receipt.data(), rlp_receipt.size());
+
+    vector<uint8_t> combined_hash_input(64);
+    std::copy(header_hash.hash, header_hash.hash + 32, combined_hash_input.begin());
+    std::copy(rlp_receipt_hash.hash, rlp_receipt_hash.hash + 32, combined_hash_input.begin() + 32);
+
+    capi_checksum256 combined_hash_output = sha256(combined_hash_input.data(), combined_hash_input.size());
+
+    // crop only 64 bits
+    return *(uint64_t *)combined_hash_output.hash;
 }

@@ -100,11 +100,9 @@ int trieValue(bytes encodedPath,
         if (pathPtr > path.size()) {return false;}
 
         bytes *currentNodePtr = &parent_nodes_rlps[i];
+        capi_checksum256 hash = keccak256((*currentNodePtr).data(), (*currentNodePtr).size());
 
-        uint8_t hash[32];
-        keccak256(hash, &(*currentNodePtr)[0], (*currentNodePtr).size());
-
-        if (memcmp(nodeKey, hash, 32) != 0) {
+        if (memcmp(nodeKey, hash.hash, 32) != 0) {
             printf("wrong 1!\n");
           return false;
         }
@@ -117,13 +115,10 @@ int trieValue(bytes encodedPath,
             printf("branch node\n");
             if (pathPtr == path.size()) {
 
-                uint8_t hash1[32];
-                keccak256(hash1, currentNodeList[16].content, currentNodeList[16].len);
+                capi_checksum256 hash1 = keccak256(currentNodeList[16].content, currentNodeList[16].len);
+                capi_checksum256 hash2 = keccak256(value.data(), value.size());
 
-                uint8_t hash2[32];
-                keccak256(hash2, &value[0], value.size());
-
-                if (memcmp(hash1, hash2, 32) == 0) {
+                if (memcmp(hash1.hash, hash2.hash, 32) == 0) {
                     printf("right 2!\n");
                     return true;
                 } else {
@@ -147,13 +142,11 @@ int trieValue(bytes encodedPath,
 
             if (pathPtr == path.size()) { //leaf node
                 printf("leaf node\n");
-                uint8_t hash1[32];
-                keccak256(hash1, currentNodeList[1].content, currentNodeList[1].len);
 
-                uint8_t hash2[32];
-                keccak256(hash2, &value[0], value.size());
+                capi_checksum256 hash1 = keccak256(currentNodeList[1].content, currentNodeList[1].len);
+                capi_checksum256 hash2 = keccak256(value.data(), value.size());
 
-                if (memcmp(hash1, hash2, 32) == 0) {
+                if (memcmp(hash1.hash, hash2.hash, 32) == 0) {
                     printf("right 3!\n");
                     return true;
                 } else {

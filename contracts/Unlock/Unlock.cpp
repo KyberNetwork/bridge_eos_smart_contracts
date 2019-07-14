@@ -39,53 +39,10 @@ CONTRACT Unlock : public contract {
 
 };
 
-ACTION Unlock::config(name token_contract,
-                      symbol token_symbol,
-                      name bridge_contract) {
-    require_auth(_self);
-    state_type state_inst(_self, _self.value);
-
-    state s = {token_contract, token_symbol, bridge_contract};
-    state_inst.set(s, _self);
-}
-
-ACTION Unlock::unlock(const vector<uint8_t>& header_rlp_vec,
-                      const vector<uint8_t>& rlp_receipt) {
-
-    state_type state_inst(_self, _self.value);
-    auto s = state_inst.get();
-
-    // calculate sealed header hash
-    uint8_t header_hash_arr[32];
-    keccak256(header_hash_arr, (uint8_t *)header_rlp_vec.data(), header_rlp_vec.size());
-    uint64_t header_hash = *((uint64_t*)header_hash_arr);
-
-    // create vector from header_hash_arr
-    vector<uint8_t> header_hash_vec(header_hash_arr, header_hash_arr + 32);
-
-    // verify longest path
-    action {permission_level{_self, "active"_n},
-            s.bridge_contract,
-            "veriflongest"_n,
-            make_tuple(header_hash_vec)}.send();
-
-    // get combined sha256 of (sha256(receipt rlp),header hash)
-    // TODO: this is duplicated with Bridge.cpp, move to common place
-    uint8_t rlp_receipt_hash[32];
-    sha256(rlp_receipt_hash, (uint8_t *)&rlp_receipt[0], rlp_receipt.size());
-
-    uint8_t combined_hash_input[64];
-    memcpy(combined_hash_input, header_hash_arr, 32);
-    memcpy(combined_hash_input + 32, rlp_receipt_hash, 32);
-
-    uint8_t combined_hash_output[32];
-    sha256(combined_hash_output, combined_hash_input, 64);
-    uint64_t *receipt_header_hash = (uint64_t *)combined_hash_output;
-
-    // make sure the reciept exists in bridge contract
-    receipts_type receipt_table(s.bridge_contract, s.bridge_contract.value);
-    eosio_assert(receipt_table.find(*receipt_header_hash) != receipt_table.end(),
-                 "reciept not verified in bridge contract");
+void parse_reciept(name *recipient,
+                   asset *to_issue,
+                   const vector<uint8_t> &rlp_receipt,
+                   symbol token_symbol) {
 
     rlp_elem elem[100] = {0};
     rlp_elem* list = elem;
@@ -109,30 +66,69 @@ ACTION Unlock::unlock(const vector<uint8_t>& header_rlp_vec,
     eosio_assert(memcmp(&lock_signature[0], function_signature->content, 32) == 0,
                  "function signature is not for knc transfer");
 
-    // fix endianess
+    // further parse amount
     uint128_t amount_128 = 0;
     for(int i = 0; i < 16; i++){
         amount_128 = amount_128 << 8;
         amount_128 = amount_128 + (uint8_t)amount->content[16 + i];
     }
+    uint128_t amount_128_scaled =
+        amount_128 / (uint128_t)(pow(10, 18 - token_symbol.precision()));
+    eosio_assert(amount_128_scaled < asset::max_amount, "amount too big");
+    uint64_t asset_amount = (uint64_t)amount_128_scaled;
 
+    *to_issue = asset(asset_amount, token_symbol);
+
+    // further parse recipient address
     uint64_t eos_address_64 = 0;
     for(int i = 0; i < 8; i++){
         eos_address_64 = eos_address_64 << 8;
         eos_address_64 = eos_address_64 + (uint8_t)eos_recipient_name->content[24 + i];
     }
-    name recipient(eos_address_64);
-    eosio_assert(is_account(recipient), "recipient account does not exist");
-    print("recipient:", recipient);
+
+    *recipient = name(eos_address_64);
+    eosio_assert(is_account(*recipient), "recipient account does not exist");
+    print("recipient:", *recipient);
     print("\n");
+}
 
-    // verify amount does not exceed 64 bit
-    uint128_t amount_128_scaled =
-        amount_128 / (uint128_t)(pow(10, 18 - s.token_symbol.precision()));
-    eosio_assert(amount_128_scaled < asset::max_amount, "amount too big");
-    uint64_t asset_amount = (uint64_t)amount_128_scaled;
+ACTION Unlock::config(name token_contract,
+                      symbol token_symbol,
+                      name bridge_contract) {
+    require_auth(_self);
+    state_type state_inst(_self, _self.value);
 
-    asset to_issue = asset(asset_amount, s.token_symbol);
+    state s = {token_contract, token_symbol, bridge_contract};
+    state_inst.set(s, _self);
+}
+
+ACTION Unlock::unlock(const vector<uint8_t>& header_rlp_vec,
+                      const vector<uint8_t>& rlp_receipt) {
+
+    state_type state_inst(_self, _self.value);
+    auto s = state_inst.get();
+
+    // calculate sealed header hash
+    capi_checksum256 header_hash = keccak256(header_rlp_vec.data(), header_rlp_vec.size());
+
+    // verify longest path
+    vector<uint8_t> header_hash_vec(32);
+    std::copy(header_hash.hash, header_hash.hash + 32, header_hash_vec.begin());
+    action {permission_level{_self, "active"_n},
+            s.bridge_contract,
+            "veriflongest"_n,
+            make_tuple(header_hash_vec)}.send();
+
+    // make sure the reciept exists in bridge contract
+    uint64_t receipt_header_hash = get_reciept_header_hash(rlp_receipt, header_hash);
+    receipts_type receipt_table(s.bridge_contract, s.bridge_contract.value);
+    eosio_assert(receipt_table.find(receipt_header_hash) != receipt_table.end(),
+                 "reciept not verified in bridge contract");
+
+    // get actual receipt values
+    name recipient;
+    asset to_issue;
+    parse_reciept(&recipient, &to_issue, rlp_receipt, s.token_symbol);
 
     action {
         permission_level{_self, "active"_n},

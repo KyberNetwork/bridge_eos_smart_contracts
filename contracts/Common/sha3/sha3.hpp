@@ -361,17 +361,20 @@ void rhash_keccak_final(sha3_ctx *ctx, uint8_t* result)
 	if (result) me64_to_le_str(result, ctx->hash, digest_length);
 }
 
-void keccak256(uint8_t* ret, uint8_t* input, uint64_t input_size) {
+capi_checksum256 keccak256(const uint8_t* input, uint64_t input_size) {
+    capi_checksum256 ret;
     sha3_ctx shactx;
     rhash_keccak_256_init(&shactx);
     rhash_keccak_update(&shactx, input, input_size);
-    rhash_keccak_final(&shactx, ret);
+    rhash_keccak_final(&shactx, ret.hash);
+    return ret;
 }
 
-void keccak512(uint8_t* ret, uint8_t* input, uint64_t input_size) {
+void keccak512(uint8_t* ret, const uint8_t* input, uint64_t input_size) {
     sha3_ctx shactx;
     rhash_keccak_512_init(&shactx);
     rhash_keccak_update(&shactx, input, input_size);
     rhash_keccak_final(&shactx, ret);
 }
+
 //#endif /* USE_KECCAK */
