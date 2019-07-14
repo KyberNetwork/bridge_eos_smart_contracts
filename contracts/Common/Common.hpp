@@ -13,13 +13,15 @@
 
 using std::string;
 using std::vector;
+using bytes = vector<uint8_t>;
+
 using namespace eosio;
 
 typedef unsigned int uint;
 
 /* helper functions - TODO - remove in production*/
-static vector<uint8_t> hex_to_bytes(const string& hex) {
-    vector<uint8_t> bytes;
+static bytes hex_to_bytes(const string& hex) {
+    bytes bytes;
 
     for (unsigned int i = 0; i < hex.length(); i += 2) {
             string byteString = hex.substr(i, 2);
@@ -30,7 +32,7 @@ static vector<uint8_t> hex_to_bytes(const string& hex) {
 }
 
 void hex_to_arr(const string& hex, uint8_t *arr) {
-    vector<uint8_t> bytes = hex_to_bytes(hex);
+    bytes bytes = hex_to_bytes(hex);
     std::copy(bytes.begin(), bytes.end(), arr);
 }
 
@@ -51,13 +53,13 @@ capi_checksum256 sha256(const uint8_t* input, uint input_size) {
     return ret;
 }
 
-uint64_t get_reciept_header_hash(const vector<uint8_t> &rlp_receipt,
+uint64_t get_reciept_header_hash(const bytes &receipt_rlp,
                                  capi_checksum256 &header_hash) {
 
     // get combined sha256 of (sha256(receipt rlp),header hash)
-    capi_checksum256 rlp_receipt_hash = sha256(rlp_receipt.data(), rlp_receipt.size());
+    capi_checksum256 rlp_receipt_hash = sha256(receipt_rlp.data(), receipt_rlp.size());
 
-    vector<uint8_t> combined_hash_input(64);
+    bytes combined_hash_input(64);
     std::copy(header_hash.hash, header_hash.hash + 32, combined_hash_input.begin());
     std::copy(rlp_receipt_hash.hash, rlp_receipt_hash.hash + 32, combined_hash_input.begin() + 32);
 
@@ -65,4 +67,8 @@ uint64_t get_reciept_header_hash(const vector<uint8_t> &rlp_receipt,
 
     // crop only 64 bits
     return *(uint64_t *)combined_hash_output.hash;
+}
+
+uint64_t crop(const uint8_t *full_hash) {
+    return *((uint64_t *)full_hash);
 }

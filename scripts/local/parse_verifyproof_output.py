@@ -10,7 +10,7 @@ final_st = ""
 with open('verifyproof_output.json') as json_file:  
 
     data = json.load(json_file)
-    final_st += "rlp_receipt = " + from_buffer_to_str(data["value_rlp"])+ "\n"
+    final_st += "receipt_rlp = " + from_buffer_to_str(data["value_rlp"])+ "\n"
 
     parent_sizes = []
     merged_items = ""
@@ -30,6 +30,6 @@ with open('verifyproof_output.json') as json_file:
     else:
         padded = striped
     final_st += "encoded_path = " + from_buffer_to_str(padded)+ "\n"
-    final_st += "header_rlp_vec = " + from_buffer_to_str(data["header_rlp"])+ "\n"
+    final_st += "header_rlp = " + from_buffer_to_str(data["header_rlp"])+ "\n"
 
 print(final_st)

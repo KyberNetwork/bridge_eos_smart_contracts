@@ -2,23 +2,21 @@
 #include "../Common/Rlp.hpp"
 #include "DataSizes.h"
 #include "LongMult.hpp"
+#include "MerkleDagElements.hpp"
 #include "MerklePatriciaProof.hpp"
 
 #define ETHASH_EPOCH_LENGTH 30000U
 #define ETHASH_MIX_BYTES 128
 #define ETHASH_ACCESSES 64
-#define MERKLE_CONVENTIONAL_LEN 128
-#define MERKLE_ELEMENT_LEN 16
 
 #define NODE_BYTES 64
 #define NODE_WORDS (64/4)
-#define MIX_WORDS (ETHASH_MIX_BYTES/4) // 32
-#define MIX_NODES (MIX_WORDS / NODE_WORDS) // 2
+#define MIX_WORDS (ETHASH_MIX_BYTES/4)
+#define MIX_NODES (MIX_WORDS / NODE_WORDS)
 
 #define FNV_PRIME 0x01000193
 
 using namespace eosio;
-using std::vector;
 
 typedef union node {
     uint8_t bytes[NODE_WORDS * 4];
@@ -46,49 +44,50 @@ CONTRACT Bridge : public contract {
     public:
         using contract::contract;
 
-        ACTION relay(const vector<uint8_t>& header_rlp_vec,
-                     const vector<uint8_t>& dag_vec,
-                     const vector<uint8_t>& proof_vec,
+        ACTION relay(const vector<uint8_t>& header_rlp,
+                     const vector<uint8_t>& dags,
+                     const vector<uint8_t>& proofs,
                      uint proof_length);
 
         ACTION veriflongest(const vector<uint8_t>& header_hash);
 
-        ACTION checkreceipt(const vector<uint8_t>& header_rlp_vec,
+        ACTION checkreceipt(const vector<uint8_t>& header_rlp,
                             const vector<uint8_t>& encoded_path,
-                            const vector<uint8_t>& rlp_receipt, // value
+                            const vector<uint8_t>& receipt_rlp,
                             const vector<uint8_t>& all_parent_nodes_rlps,
                             const vector<uint>& all_parnet_rlp_sizes);
 
         ACTION storeroots(uint64_t genesis_block_num,
-                          const vector<uint64_t>& epoch_num_vec,
-                          const vector<uint8_t>& root_vec);
+                          const vector<uint64_t>& epoch_nums,
+                          const vector<uint8_t>& dag_roots);
 
         TABLE state {
-            uint64_t        headers_head;
-            uint128_t       headers_head_difficulty;
-            uint64_t        headers_head_block_num;
-            uint64_t        genesis_block_num;
+            uint64_t   headers_head;
+            uint128_t  headers_head_difficulty;
+            uint64_t   headers_head_block_num;
+            uint64_t   genesis_block_num;
         };
 
         TABLE roots {
-            uint64_t                     epoch_num;
-            vector<uint8_t>   root;
-            uint64_t        primary_key() const { return epoch_num; }
+            uint64_t epoch_num;
+            bytes    root;
+            uint64_t primary_key() const { return epoch_num; }
         };
 
         TABLE headers {
             // TODO - only 8B out of the hash, in production add 32B to result and compare
-            uint64_t    header_hash;
-            uint64_t    previous_hash;
-            uint128_t   total_difficulty;
-            uint64_t    block_num;
-            vector<uint64_t> receipt_hashes; // only 8B out of the hash
+            uint64_t         header_hash;
+            uint64_t         previous_hash;
+            uint128_t        total_difficulty;
+            uint64_t         block_num;
+            // TODO - only 8B out of the hash, in production add 32B to result and compare
+            vector<uint64_t> receipt_hashes;
             uint64_t primary_key() const { return header_hash; }
         };
 
         TABLE receipts {
             // TODO - only 8B out of the hash, in production add 32B to result and compare
-            uint64_t    receipt_header_hash;
+            uint64_t receipt_header_hash;
             uint64_t primary_key() const { return receipt_header_hash; }
         };
 
@@ -99,8 +98,7 @@ CONTRACT Bridge : public contract {
 
 
     private:
-        void parse_header(struct header_info_struct* header_info,
-                          const vector<uint8_t>& header_rlp_vec);
+        void parse_header(struct header_info_struct* header_info, const bytes& header_rlp);
         void store_header(struct header_info_struct* header_info);
 };
 
@@ -112,76 +110,16 @@ uint32_t fnv_hash(uint32_t const x, uint32_t const y)
 uint64_t ethash_get_datasize(uint64_t const block_num)
 {
     eosio_assert(block_num / ETHASH_EPOCH_LENGTH < EPOCH_ELEMENTS, "block number too big");
-    int index = block_num / ETHASH_EPOCH_LENGTH;
-    int array_num = index / EPOCH_SINGLE_ARRAY_SIZE;
-    int index_in_array = index % EPOCH_SINGLE_ARRAY_SIZE;
+    uint index = block_num / ETHASH_EPOCH_LENGTH;
+    uint array_num = index / EPOCH_SINGLE_ARRAY_SIZE;
+    uint index_in_array = index % EPOCH_SINGLE_ARRAY_SIZE;
 
     return dag_sizes_array[array_num][index_in_array];
 }
 
-void reverseBytes(uint8_t *ret, uint8_t *data, uint size) {
-    for( int i = 0; i < size; i++ ) {
-        ret[i] = data[size - 1 - i];
-    }
-}
-
-void merkle_conventional_encoding(uint8_t *ret, uint8_t *data) {
-    reverseBytes(ret , data, 32);
-    reverseBytes(ret + 32, data + 32, 32);
-    reverseBytes(ret + 64, data + 64, 32);
-    reverseBytes(ret + 96, data + 96, 32);
-    return;
-}
-
-void merkle_element_hash(uint8_t *ret, uint8_t *data){
-  uint8_t conventional[MERKLE_CONVENTIONAL_LEN];
-  merkle_conventional_encoding(conventional, data);
-
-  capi_checksum256 tmp = sha256(conventional, 128);
-  memcpy(ret, tmp.hash + 16, 16); // last 16 bytes
-  return;
-}
-
-void merkle_hash_siblings(uint8_t *ret, uint8_t *a, uint8_t *b){
-    uint8_t padded_pair[64] = {0};
-
-    memcpy(padded_pair + 48, a, 16);
-    memcpy(padded_pair + 16, b, 16);
-
-    capi_checksum256 tmp = sha256(padded_pair, 64);
-    memcpy(ret, tmp.hash + 16, 16); // last 16 bytes
-    return;
-}
-
-void merkle_apply_path(uint index,
-                uint8_t *res, // 16B
-                uint8_t *full_element, // 128B
-                uint8_t *proofs_start, /* does not include root and leaf */
-                uint proof_size) {
-   uint8_t *leaf = res;
-   uint8_t *left;
-   uint8_t *right;
-
-   merkle_element_hash(leaf, full_element);
-
-   for(int i = 0; i < proof_size; i++) {
-       uint8_t *current_proof = &proofs_start[i * MERKLE_ELEMENT_LEN];
-       uint side = index & 0x1;
-       if( side ) {
-           left = leaf;
-           right = current_proof;
-       } else {
-           right = leaf;
-           left = current_proof;
-       }
-       merkle_hash_siblings(leaf, left, right);
-       index = index / 2;
-   }
-}
-
 void verify_header(struct header_info_struct* header_info,
-                   const vector<uint8_t>& dag_vec,
-                   const vector<uint8_t>& proof_vec,
+                   const bytes& dags,
+                   const bytes& proofs,
                    uint proof_length) {
 
     uint8_t *header_hash = header_info->unsealed_header_hash.hash;
@@ -224,8 +162,8 @@ void verify_header(struct header_info_struct* header_info,
 
         // dag elements verification
         uint8_t res[MERKLE_ELEMENT_LEN];
-        uint8_t *current_item = (uint8_t *)(&dag_vec[i * NODE_BYTES * 2]);
-        uint8_t *proofs_start = (uint8_t *)(&proof_vec[i * proof_length * MERKLE_ELEMENT_LEN]);
+        uint8_t *current_item = (uint8_t *)(&dags[i * NODE_BYTES * 2]);
+        uint8_t *proofs_start = (uint8_t *)(&proofs[i * proof_length * MERKLE_ELEMENT_LEN]);
 
         merkle_apply_path(index, res, current_item, proofs_start, proof_length);
         eosio_assert(0 == memcmp(res, expected_root, MERKLE_ELEMENT_LEN),
@@ -233,7 +171,7 @@ void verify_header(struct header_info_struct* header_info,
 
         for (unsigned n = 0; n != MIX_NODES; ++n) {
 
-            uint32_t *current_item_word = (uint32_t *)(&dag_vec[NODE_BYTES * (i * 2 + n)]);
+            uint32_t *current_item_word = (uint32_t *)(&dags[NODE_BYTES * (i * 2 + n)]);
             for (unsigned w = 0; w != NODE_WORDS; ++w) {
                 mix[n].words[w] = fnv_hash(mix[n].words[w], current_item_word[w]);
             }
@@ -258,36 +196,35 @@ void verify_header(struct header_info_struct* header_info,
     print("mixed_hash: ");
     print_uint8_array(mix->bytes, 32);
 
-    //check ethash result meets the rquire difficulty
+    //check ethash result meets the required difficulty
     eosio_assert(check_pow(difficulty, difficulty_len, ethash.hash), "pow difficulty failure");
 
     return;
 }
 
 void hash_header_rlp(struct header_info_struct* header_info,
-                     const vector<uint8_t>& header_rlp_vec,
+                     const bytes& header_rlp,
                      rlp_item* items) {
 
     // calculate sealed header hash
-    header_info->header_hash = keccak256(header_rlp_vec.data(), header_rlp_vec.size());
+    header_info->header_hash = keccak256(header_rlp.data(), header_rlp.size());
 
     // calculate unsealed header hash (w/o nonce and mixed fields).
-    int trim_len = remove_last_field_from_rlp((uint8_t *)header_rlp_vec.data(),
+    int trim_len = remove_last_field_from_rlp((uint8_t *)header_rlp.data(),
                                               items[NONCE_FIELD].len);
-    eosio_assert(trim_len == (header_rlp_vec.size() - 9), "wrong 1st trim length");
+    eosio_assert(trim_len == (header_rlp.size() - 9), "wrong 1st trim length");
 
-    trim_len = remove_last_field_from_rlp((uint8_t *)header_rlp_vec.data(),
+    trim_len = remove_last_field_from_rlp((uint8_t *)header_rlp.data(),
                                           items[MIX_HASH_FIELD].len);
-    eosio_assert(trim_len == (header_rlp_vec.size() - 42), "wrong 2nd trim length");
+    eosio_assert(trim_len == (header_rlp.size() - 42), "wrong 2nd trim length");
 
-    header_info->unsealed_header_hash = keccak256(header_rlp_vec.data(), trim_len);
+    header_info->unsealed_header_hash = keccak256(header_rlp.data(), trim_len);
 }
 
-void Bridge::parse_header(struct header_info_struct* header_info,
-                          const vector<uint8_t>& header_rlp_vec) {
+void Bridge::parse_header(struct header_info_struct* header_info, const bytes& header_rlp) {
     rlp_item items[15];
     uint num_items;
-    decode_list((uint8_t *)header_rlp_vec.data(), items, &num_items);
+    decode_list((uint8_t *)header_rlp.data(), items, &num_items);
 
     header_info->nonce = get_uint64(&items[NONCE_FIELD]);
     header_info->block_num = get_uint64(&items[NUMBER_FIELD]);
@@ -296,7 +233,7 @@ void Bridge::parse_header(struct header_info_struct* header_info,
     header_info->previous_hash = items[PARENT_HASH_FIELD].content;
     header_info->receipt_root = items[RECIEPT_ROOT_FIELD].content;
 
-    hash_header_rlp(header_info, header_rlp_vec, items);
+    hash_header_rlp(header_info, header_rlp, items);
 
     // get pre-stored root
     roots_type roots_inst(_self, _self.value);
@@ -308,8 +245,8 @@ void Bridge::store_header(struct header_info_struct* header_info) {
     state_type state_inst(_self, _self.value);
     headers_type headers_inst(_self, _self.value);
 
-    uint64_t header_hash = *((uint64_t*)header_info->header_hash.hash);
-    uint64_t previous_hash = *((uint64_t*)header_info->previous_hash);
+    uint64_t header_hash = crop(header_info->header_hash.hash);
+    uint64_t previous_hash = crop(header_info->previous_hash);
     uint64_t block_num = header_info->block_num;
 
     // calculate total difficulty
@@ -357,11 +294,11 @@ void Bridge::store_header(struct header_info_struct* header_info) {
     }
 }
 
-ACTION Bridge::veriflongest(const vector<uint8_t>& header_hash) {
+ACTION Bridge::veriflongest(const bytes& header_hash) {
     state_type state_inst(_self, _self.value);
     headers_type headers_inst(_self, _self.value);
 
-    uint64_t header_hash_key = *((uint64_t*)&header_hash[0]);
+    uint64_t header_hash_key = crop(header_hash.data());
 
     // go backwards from list head and find given header
     auto s = state_inst.get();
@@ -383,76 +320,74 @@ ACTION Bridge::veriflongest(const vector<uint8_t>& header_hash) {
 }
 
 ACTION Bridge::storeroots(uint64_t genesis_block_num,
-                          const vector<uint64_t>& epoch_num_vec,
-                          const vector<uint8_t>& root_vec){
+                          const vector<uint64_t>& epoch_nums,
+                          const bytes& dag_roots){
 
     require_auth(_self);
-
     state_type state_inst(_self, _self.value);
     eosio_assert(!state_inst.exists(), "storing roots can only be done once");
     state initial_state = {0, 0, 0, genesis_block_num};
     state_inst.set(initial_state, _self);
 
-    eosio_assert(epoch_num_vec.size() * MERKLE_ELEMENT_LEN == root_vec.size(),
-                 "block num and root vectors mismatch");
+    eosio_assert(epoch_nums.size() * MERKLE_ELEMENT_LEN == dag_roots.size(),
+                 "epochs and roots vectors mismatch");
     roots_type roots_inst(_self, _self.value);
 
-    for(uint i = 0; i < epoch_num_vec.size(); i++){
-        auto itr = roots_inst.find(epoch_num_vec[i]);
+    for(uint i = 0; i < epoch_nums.size(); i++){
+        auto itr = roots_inst.find(epoch_nums[i]);
         bool token_exists = (itr != roots_inst.end());
         if (!token_exists) {
             roots_inst.emplace(_self, [&](auto& s) {
-                s.epoch_num = epoch_num_vec[i];
+                s.epoch_num = epoch_nums[i];
 
                 // TODO: improve pushing to use memcpy or std::cpy
                 for(uint j = 0; j < MERKLE_ELEMENT_LEN; j++ ){
-                    s.root.push_back(root_vec[i * MERKLE_ELEMENT_LEN + j]);
+                    s.root.push_back(dag_roots[i * MERKLE_ELEMENT_LEN + j]);
                 }
             });
         } else {
             roots_inst.modify(itr, _self, [&](auto& s) {
-                s.epoch_num = epoch_num_vec[i];
+                s.epoch_num = epoch_nums[i];
 
                 // TODO: improve pushing to use memcpy or std::cpy
                 for(uint j = 0; j < MERKLE_ELEMENT_LEN; j++ ){
-                    s.root.push_back(root_vec[i * MERKLE_ELEMENT_LEN + j]);
+                    s.root.push_back(dag_roots[i * MERKLE_ELEMENT_LEN + j]);
                 }
             });
         }
     }
 };
 
-ACTION Bridge::relay(const vector<uint8_t>& header_rlp_vec,
-                     const vector<uint8_t>& dag_vec,
-                     const vector<uint8_t>& proof_vec,
+ACTION Bridge::relay(const bytes& header_rlp,
+                     const bytes& dags,
+                     const bytes& proofs,
                      uint proof_length) {
 
     struct header_info_struct header_info;
-    parse_header(&header_info, header_rlp_vec);
-    verify_header(&header_info, dag_vec, proof_vec, proof_length);
+    parse_header(&header_info, header_rlp);
+    verify_header(&header_info, dags, proofs, proof_length);
     store_header(&header_info);
 
     return;
 }
 
-
-ACTION Bridge::checkreceipt(const vector<uint8_t>& header_rlp_vec,
-                            const vector<uint8_t>& encoded_path,
-                            const vector<uint8_t>& rlp_receipt, // value
-                            const vector<uint8_t>& all_parent_nodes_rlps,
+ACTION Bridge::checkreceipt(const bytes& header_rlp,
+                            const bytes& encoded_path,
+                            const bytes& receipt_rlp,
+                            const bytes& all_parent_nodes_rlps,
                             const vector<uint>& all_parnet_rlp_sizes) {
     struct header_info_struct header_info;
-    parse_header(&header_info, header_rlp_vec);
+    parse_header(&header_info, header_rlp);
 
     eosio_assert(trieValue(encoded_path,
-                           rlp_receipt,
+                           receipt_rlp,
                            all_parent_nodes_rlps,
                            all_parnet_rlp_sizes,
                            header_info.receipt_root),
                  "failed receipt patricia trie verification"
     );
 
-    uint64_t receipt_header_hash = get_reciept_header_hash(rlp_receipt, header_info.header_hash);
+    uint64_t receipt_header_hash = get_reciept_header_hash(receipt_rlp, header_info.header_hash);
 
     receipts_type receipts_inst(_self, _self.value);
     auto itr = receipts_inst.find(receipt_header_hash);

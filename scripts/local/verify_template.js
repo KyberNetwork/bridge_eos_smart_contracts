@@ -21,8 +21,8 @@ async function main (){
     unlockAsUser = await userData.eos.contract("unlock");
 
 await bridgeAsUser.checkreceipt({ 
-    header_rlp_vec:header_rlp_vec,
-    rlp_receipt:rlp_receipt,
+    header_rlp:header_rlp,
+    receipt_rlp:receipt_rlp,
     encoded_path:encoded_path,
     all_parent_nodes_rlps:all_parent_nodes_rlps,
     all_parnet_rlp_sizes:all_parnet_rlp_sizes,
@@ -30,8 +30,8 @@ await bridgeAsUser.checkreceipt({
 { authorization: [`${userData.account}@active`] } )
     
 await unlockAsUser.unlock({ 
-    header_rlp_vec:header_rlp_vec,
-    rlp_receipt:rlp_receipt,
+    header_rlp:header_rlp,
+    receipt_rlp:receipt_rlp,
    },
 { authorization: [`${userData.account}@active`] } )
 }

@@ -53,9 +53,9 @@ else:
     final_st = "await bridgeAsRelayer.relay({ \n"
 
 if USE_CLEOS:
-    final_st = final_st + "\"header_rlp_vec\":[\n"
+    final_st = final_st + "\"header_rlp\":[\n"
 else:
-    final_st = final_st + "header_rlp_vec:[\n"
+    final_st = final_st + "header_rlp:[\n"
 
 split_to_2 = ["0x" + header_rlp[i:i+2] for i in range(0, len(header_rlp), 2)]
 as_str = (', '.join(split_to_2) + ',')
@@ -67,9 +67,9 @@ else:
     final_st = final_st + rlp_arr + "],\n"
 
 if USE_CLEOS:
-    final_st = final_st + "\"dag_vec\":[\n"
+    final_st = final_st + "\"dags\":[\n"
 else:
-    final_st = final_st + "dag_vec:[\n"
+    final_st = final_st + "dags:[\n"
 
 dag_arr = ""
 for chunk in dag_chunks:
@@ -84,9 +84,9 @@ else:
     final_st = final_st + "],\n"
 
 if USE_CLEOS:
-    final_st = final_st + "\"proof_vec\":[\n"
+    final_st = final_st + "\"proofs\":[\n"
 else:
-    final_st = final_st + "proof_vec:[\n"
+    final_st = final_st + "proofs:[\n"
 
 proof_arr = ""
 for chunk in proof_chunks:
