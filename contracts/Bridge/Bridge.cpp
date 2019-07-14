@@ -1,9 +1,9 @@
-#include "../Common/Common.hpp"
-#include "../Common/Rlp.hpp"
-#include "DataSizes.h"
-#include "LongMult.hpp"
-#include "MerkleDagElements.hpp"
-#include "MerklePatriciaProof.hpp"
+#include "../Common/common.hpp"
+#include "../Common/rlp.hpp"
+#include "dag_merkle.hpp"
+#include "dag_sizes.h"
+#include "long_mult.hpp"
+#include "patricia_merkle.hpp"
 
 #define ETHASH_EPOCH_LENGTH 30000U
 #define ETHASH_MIX_BYTES 128
