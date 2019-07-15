@@ -36,7 +36,13 @@ CONTRACT Unlock : public contract {
             name   bridge_contract;
         };
 
+        TABLE lockid {
+            uint64_t lock_id;
+            uint64_t primary_key() const { return lock_id; }
+        };
+
         typedef eosio::singleton<"state"_n, state> state_type;
+        typedef eosio::multi_index<"lockid"_n, lockid> lockid_type;
 
     private:
 
@@ -44,6 +50,7 @@ CONTRACT Unlock : public contract {
 
 void parse_reciept(name *recipient,
                    asset *to_issue,
+                   uint64_t *lock,
                    const bytes &receipt_rlp,
                    symbol token_symbol) {
     rlp_elem elem[100] = {0};
@@ -84,9 +91,15 @@ void parse_reciept(name *recipient,
     }
     *recipient = name(eos_address_64);
     eosio_assert(is_account(*recipient), "recipient account does not exist");
-
     print("recipient:", *recipient);
     print("\n");
+
+    // further parse lock id
+    uint64_t lock_id_64 = 0;
+    for (int i = 0; i < 8; i++){
+        lock_id_64 = (lock_id_64 << 8) + (uint8_t)lock_id->content[24 + i];
+    }
+    *lock = lock_id_64;
 }
 
 ACTION Unlock::config(name token_contract, symbol token_symbol, name bridge_contract) {
@@ -121,7 +134,16 @@ ACTION Unlock::unlock(const bytes& header_rlp, const bytes& receipt_rlp) {
     // get actual receipt values
     name recipient;
     asset to_issue;
-    parse_reciept(&recipient, &to_issue, receipt_rlp, s.token_symbol);
+    uint64_t lock_id;
+    parse_reciept(&recipient, &to_issue, &lock_id, receipt_rlp, s.token_symbol);
+
+    // store lock id
+    lockid_type lockid_inst(_self, _self.value);
+    bool exists = (lockid_inst.find(lock_id) != lockid_inst.end());
+    eosio_assert(!exists, "current lock receipt was already processed");
+    lockid_inst.emplace(_self, [&](auto& s) {
+        s.lock_id = lock_id;
+    });
 
     action {
         permission_level{_self, "active"_n},
