@@ -1,7 +1,7 @@
 set -x
 
 # test case
-bash scripts/local/create_relay.sh 8100068
+bash scripts/local/create_relay.sh 8100068 --genesis
 bash scripts/local/create_relay.sh 8100069
 bash scripts/local/create_relay.sh 8100070
 

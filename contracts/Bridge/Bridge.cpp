@@ -80,8 +80,6 @@ CONTRACT Bridge : public contract {
             uint64_t         previous_hash;
             uint128_t        total_difficulty;
             uint64_t         block_num;
-            // TODO - only 8B out of the hash, in production add 32B to result and compare
-            vector<uint64_t> receipt_hashes;
             uint64_t primary_key() const { return header_hash; }
         };
 
@@ -254,7 +252,7 @@ void Bridge::store_header(struct header_info_struct* header_info) {
 
     if (block_num == state_inst.get().genesis_block_num) {
         // genesis can only be input by the contract's owner
-        // TODO - require_auth(_self);
+        require_auth(_self);
         previous_total_difficulty = 0;
     } else {
         auto prev_itr = headers_inst.find(previous_hash);

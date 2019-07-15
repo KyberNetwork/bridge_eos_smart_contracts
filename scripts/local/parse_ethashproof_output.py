@@ -20,7 +20,7 @@ MAX_PROOFS = 64 # this limitation is because of "/usr/local/bin/cleos: Argument 
 # get json data
 
 import json
-
+import sys
 
 dag_chunks = []
 proof_chunks = []
@@ -50,7 +50,10 @@ final_st = ""
 if USE_CLEOS: 
     final_st = "cleos push action bridge relay \'{ \n"
 else:
-    final_st = "await bridgeAsRelayer.relay({ \n"
+    if len(sys.argv) > 1 and sys.argv[1] == "--genesis":
+        final_st = "await bridgeAsBridge.relay({ \n"
+    else:
+        final_st = "await bridgeAsRelayer.relay({ \n"
 
 if USE_CLEOS:
     final_st = final_st + "\"header_rlp\":[\n"
@@ -108,7 +111,10 @@ else:
 if USE_CLEOS:
     final_st = final_st + "}\' -p bridge@active"
 else:
-    final_st = final_st + "{ authorization: [`${relayerData.account}@active`] } )\n"
+    if len(sys.argv) > 1 and sys.argv[1] == "--genesis":
+        final_st = final_st + "{ authorization: [`${bridgeData.account}@active`] } )\n"
+    else:
+        final_st = final_st + "{ authorization: [`${relayerData.account}@active`] } )\n"
     final_st = final_st + "}\n"
     final_st = final_st + "main()"
 
