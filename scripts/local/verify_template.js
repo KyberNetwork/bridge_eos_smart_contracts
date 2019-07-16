@@ -18,7 +18,7 @@ async function main (){
 
     /* create contract objects */
     bridgeAsUser = await userData.eos.contract("bridge");
-    unlockAsUser = await userData.eos.contract("unlock");
+    unlockAsUser = await userData.eos.contract("issue");
 
 await bridgeAsUser.checkreceipt({ 
     header_rlp:header_rlp,
@@ -29,7 +29,7 @@ await bridgeAsUser.checkreceipt({
 },
 { authorization: [`${userData.account}@active`] } )
     
-await unlockAsUser.unlock({ 
+await unlockAsUser.issue({ 
     header_rlp:header_rlp,
     receipt_rlp:receipt_rlp,
    },

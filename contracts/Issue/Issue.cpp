@@ -22,13 +22,13 @@ struct receipts {
 typedef eosio::multi_index<"receipts"_n, receipts> receipts_type;
 
 
-CONTRACT Unlock : public contract {
+CONTRACT Issue : public contract {
 
     public:
         using contract::contract;
 
         ACTION config(name token_contract, symbol token_symbol, name bridge_contract);
-        ACTION unlock(const vector<uint8_t>& header_rlp, const vector<uint8_t>& receipt_rlp);
+        ACTION issue(const vector<uint8_t>& header_rlp, const vector<uint8_t>& receipt_rlp);
 
         TABLE state {
             name   token_contract;
@@ -102,7 +102,7 @@ void parse_reciept(name *recipient,
     *lock = lock_id_64;
 }
 
-ACTION Unlock::config(name token_contract, symbol token_symbol, name bridge_contract) {
+ACTION Issue::config(name token_contract, symbol token_symbol, name bridge_contract) {
     require_auth(_self);
     state_type state_inst(_self, _self.value);
 
@@ -110,7 +110,7 @@ ACTION Unlock::config(name token_contract, symbol token_symbol, name bridge_cont
     state_inst.set(s, _self);
 }
 
-ACTION Unlock::unlock(const bytes& header_rlp, const bytes& receipt_rlp) {
+ACTION Issue::issue(const bytes& header_rlp, const bytes& receipt_rlp) {
     state_type state_inst(_self, _self.value);
     auto s = state_inst.get();
 
@@ -160,7 +160,7 @@ extern "C" {
     void apply(uint64_t receiver, uint64_t code, uint64_t action) {
         if (code == receiver){
             switch( action ) {
-                EOSIO_DISPATCH_HELPER( Unlock, (config)(unlock))
+                EOSIO_DISPATCH_HELPER( Issue, (config)(issue))
             }
         }
         eosio_exit(0);

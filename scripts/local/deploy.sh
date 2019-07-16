@@ -1,4 +1,4 @@
-#cleos wallet unlock --password XXXXXXXXXXXXXXXXXXXX...
+#cleos wallet issue --password XXXXXXXXXXXXXXXXXXXX...
 
 #in another shell:
 #rm -rf ~/.local/share/eosio/nodeos/data
@@ -12,14 +12,14 @@ PUBLIC_KEY=EOS5CYr5DvRPZvfpsUGrQ2SnHeywQn66iSbKKXn4JDTbFFr36TRTX
 EOSIO_DEV_KEY=EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV
 
 cleos create account eosio bridge $PUBLIC_KEY
-cleos create account eosio unlock $PUBLIC_KEY
+cleos create account eosio issue $PUBLIC_KEY
 cleos create account eosio token $PUBLIC_KEY
 cleos create account eosio multimultixx $PUBLIC_KEY
 
 # token
 cleos set contract token contracts/Token Token.wasm --abi Token.abi -p token@active
 cleos set account permission token active "{\"threshold\": 1, \"keys\":[{\"key\":\"$PUBLIC_KEY\", \"weight\":1}] , \"accounts\":[{\"permission\":{\"actor\":\"token\",\"permission\":\"eosio.code\"},\"weight\":1}], \"waits\":[] }" owner -p token@active
-cleos push action token create '[ "unlock", "1000000000.0000 WATER"]'  -p token@active
+cleos push action token create '[ "issue", "1000000000.0000 WATER"]'  -p token@active
 
 # bridge
 cleos set contract bridge contracts/Bridge Bridge.wasm --abi Bridge.abi -p bridge@active
@@ -31,15 +31,15 @@ cleos push action bridge storeroots "{
              0xa3,0x23,0x1a,0x20,0x7b,0x1d,0xaf,0x19,0x69,0x3a,0x1a,0x5a,0xd1,0x8c,0x6a,0xc4]
 }" -p bridge@active
 
-# unlock
-cleos set contract unlock contracts/Unlock Unlock.wasm --abi Unlock.abi -p unlock@active
-cleos set account permission unlock active "{\"threshold\": 1, \"keys\":[{\"key\":\"$PUBLIC_KEY\", \"weight\":1}] , \"accounts\":[{\"permission\":{\"actor\":\"unlock\",\"permission\":\"eosio.code\"},\"weight\":1}], \"waits\":[] }" owner -p unlock@active
+# issue
+cleos set contract issue contracts/Issue Issue.wasm --abi Issue.abi -p issue@active
+cleos set account permission issue active "{\"threshold\": 1, \"keys\":[{\"key\":\"$PUBLIC_KEY\", \"weight\":1}] , \"accounts\":[{\"permission\":{\"actor\":\"issue\",\"permission\":\"eosio.code\"},\"weight\":1}], \"waits\":[] }" owner -p issue@active
 
-cleos push action unlock config "{
+cleos push action issue config "{
 \"token_contract\":\"token\"
 \"token_symbol\": \"4,WATER\",
 \"bridge_contract\": \"bridge\"
-}" -p unlock@active
+}" -p issue@active
 
 
 
