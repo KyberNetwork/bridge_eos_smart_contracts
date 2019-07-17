@@ -31,6 +31,8 @@ ACTION Token::issue(name to, asset quantity, string memo) {
     auto existing = statstable.find(sym_name);
     eosio_assert(existing != statstable.end(), "token with symbol does not exist, create token before issue");
     const auto& st = *existing;
+    eosio_assert( to == st.issuer, "tokens can only be issued to issuer account" );
+
     require_auth(st.issuer);
     eosio_assert(quantity.is_valid(), "invalid quantity");
     eosio_assert(quantity.amount > 0, "must issue positive quantity");
@@ -43,10 +45,6 @@ ACTION Token::issue(name to, asset quantity, string memo) {
     });
 
     add_balance(st.issuer, quantity, st.issuer);
-
-    if (to != st.issuer) {
-        SEND_INLINE_ACTION(*this, transfer, {st.issuer,"active"_n}, {st.issuer, to, quantity, memo});
-    }
 }
 
 ACTION Token::transfer(name from, name to, asset quantity, string memo) {

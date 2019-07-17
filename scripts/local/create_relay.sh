@@ -1,3 +1,4 @@
+set -x
 BLOCK_NUM=$1;
 GENESIS=$2 # either empty or "--genesis"
 

@@ -1,4 +1,5 @@
 import json
+import sys
 
 def from_buffer_to_str(buffer):
     stripped = buffer.strip().replace(' ', '').replace(',', '').replace('0x','')
@@ -31,5 +32,7 @@ with open('verifyproof_output.json') as json_file:
         padded = striped
     final_st += "encoded_path = " + from_buffer_to_str(padded)+ "\n"
     final_st += "header_rlp = " + from_buffer_to_str(data["header_rlp"])+ "\n"
+    final_st += "event_num_in_tx = " + sys.argv[1] + "\n"
+
 
 print(final_st)

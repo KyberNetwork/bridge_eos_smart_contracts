@@ -323,7 +323,6 @@ ACTION Bridge::storeroots(uint64_t genesis_block_num,
 
     require_auth(_self);
     state_type state_inst(_self, _self.value);
-    eosio_assert(!state_inst.exists(), "storing roots can only be done once");
     state initial_state = {0, 0, 0, genesis_block_num};
     state_inst.set(initial_state, _self);
 
@@ -333,8 +332,8 @@ ACTION Bridge::storeroots(uint64_t genesis_block_num,
 
     for(uint i = 0; i < epoch_nums.size(); i++){
         auto itr = roots_inst.find(epoch_nums[i]);
-        bool token_exists = (itr != roots_inst.end());
-        if (!token_exists) {
+        bool exists = (itr != roots_inst.end());
+        if (!exists) {
             roots_inst.emplace(_self, [&](auto& s) {
                 s.epoch_num = epoch_nums[i];
 

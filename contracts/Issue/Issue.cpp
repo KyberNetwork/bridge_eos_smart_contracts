@@ -28,7 +28,9 @@ CONTRACT Issue : public contract {
         using contract::contract;
 
         ACTION config(name token_contract, symbol token_symbol, name bridge_contract);
-        ACTION issue(const vector<uint8_t>& header_rlp, const vector<uint8_t>& receipt_rlp);
+        ACTION issue(const vector<uint8_t>& header_rlp,
+                     const vector<uint8_t>& receipt_rlp,
+                     uint event_num_in_tx);
 
         TABLE state {
             name   token_contract;
@@ -52,7 +54,8 @@ void parse_reciept(name *recipient,
                    asset *to_issue,
                    uint64_t *lock,
                    const bytes &receipt_rlp,
-                   symbol token_symbol) {
+                   symbol token_symbol,
+                   uint event_num_in_tx) {
     rlp_elem elem[100] = {0};
     rlp_elem* list = elem;
     rlp_elem* elem_ptr = elem + 1;
@@ -60,7 +63,7 @@ void parse_reciept(name *recipient,
     decode_list((uint8_t *)receipt_rlp.data(), list, &elem_ptr);
 
     rlp_elem* logs = get_n_elem(list, 3);
-    rlp_elem* event = get_n_elem(logs, 1);                  // second event
+    rlp_elem* event = get_n_elem(logs, event_num_in_tx);
 
     rlp_elem* address = get_n_elem(event, 0);
     rlp_elem* topics = get_n_elem(event, 1);
@@ -110,7 +113,7 @@ ACTION Issue::config(name token_contract, symbol token_symbol, name bridge_contr
     state_inst.set(s, _self);
 }
 
-ACTION Issue::issue(const bytes& header_rlp, const bytes& receipt_rlp) {
+ACTION Issue::issue(const bytes& header_rlp, const bytes& receipt_rlp, uint event_num_in_tx) {
     state_type state_inst(_self, _self.value);
     auto s = state_inst.get();
 
@@ -135,7 +138,7 @@ ACTION Issue::issue(const bytes& header_rlp, const bytes& receipt_rlp) {
     name recipient;
     asset to_issue;
     uint64_t lock_id;
-    parse_reciept(&recipient, &to_issue, &lock_id, receipt_rlp, s.token_symbol);
+    parse_reciept(&recipient, &to_issue, &lock_id, receipt_rlp, s.token_symbol, event_num_in_tx);
 
     // store lock id
     lockid_type lockid_inst(_self, _self.value);
@@ -145,12 +148,16 @@ ACTION Issue::issue(const bytes& header_rlp, const bytes& receipt_rlp) {
         s.lock_id = lock_id;
     });
 
+    // first issue to self
     action {
         permission_level{_self, "active"_n},
         s.token_contract,
         "issue"_n,
-        std::make_tuple(recipient, to_issue, string("issued tokens from waterloo"))
+        std::make_tuple(_self, to_issue, string("tokens to Issue contract"))
     }.send();
+
+    // then send
+    async_pay(_self, recipient, to_issue, s.token_contract, "tokens from Issue contract");
 
     print("done issuing of: ", to_issue);
     print("\n");

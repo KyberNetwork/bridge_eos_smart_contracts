@@ -32,6 +32,7 @@ await bridgeAsUser.checkreceipt({
 await unlockAsUser.issue({ 
     header_rlp:header_rlp,
     receipt_rlp:receipt_rlp,
+    event_num_in_tx:event_num_in_tx
    },
 { authorization: [`${userData.account}@active`] } )
 }

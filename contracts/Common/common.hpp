@@ -72,3 +72,12 @@ uint64_t get_reciept_header_hash(const bytes &receipt_rlp,
 uint64_t crop(const uint8_t *full_hash) {
     return *((uint64_t *)full_hash);
 }
+
+void async_pay(name from, name to, asset quantity, name dest_contract, string memo) {
+    action {
+        permission_level{from, "active"_n},
+        dest_contract,
+        "transfer"_n,
+        std::make_tuple(from, to, quantity, memo)
+    }.send();
+}
