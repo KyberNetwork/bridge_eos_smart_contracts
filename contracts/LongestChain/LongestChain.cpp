@@ -10,6 +10,9 @@ CONTRACT LongestChain : public contract {
 
     public:
         using contract::contract;
+        ACTION setgenesis(uint64_t genesis_block_num,
+                          uint64_t header_hash,
+                          uint64_t difficulty);
 
         ACTION initscratch(uint64_t msg_sender,
                            uint64_t anchor_block_num);
@@ -52,7 +55,7 @@ CONTRACT LongestChain : public contract {
         TABLE scratchdata {
             // TODO - only 8B out of the hash, in production add 32B to result and compare
             uint64_t         anchor_sender_hash;
-            uint64_t         previous_block_hash;
+            uint64_t         last_block_hash; // for ethash verification
             uint128_t        total_difficulty;
             vector<uint64_t> small_interval_list;
             uint64_t primary_key() const { return anchor_sender_hash; }
@@ -94,7 +97,7 @@ ACTION LongestChain::setgenesis(uint64_t genesis_block_num,
 
     state initial_state = {
             0,                 // last_issued_key
-            0,                 // anchors_head_difficultyc
+            0,                 // anchors_head_difficulty
             genesis_block_num, // anchors_head_block_num
             genesis_block_num  // genesis_block_num
     };
@@ -134,7 +137,7 @@ ACTION LongestChain::initscratch(uint64_t msg_sender,
 
     scratch_inst.emplace(_self, [&](auto& s) {
         s.anchor_sender_hash = key;
-        s.previous_block_hash = 0; // TODO - set previous/last_block_hash to previous_anchor's sha3
+        s.last_block_hash = 0; // TODO - set previous/last_block_hash to previous_anchor's sha3
         s.total_difficulty = 0; // TODO - get from previous anchor.
 
         for( int i = 0; i < ANCHOR_SMALL_INTERVAL; i++) {
@@ -152,25 +155,25 @@ ACTION LongestChain::storeheader(uint64_t msg_sender,
 
     // load scratchpad data for the tuple
     // round up block num to multiple of small interval
-    uint64_t next_anchor = round_up(block_num, ANCHOR_SMALL_INTERVAL)
-    uint64_t key = get_tuple_key(msg_sender, anchor_block_num);
+    uint64_t next_anchor = round_up(block_num, ANCHOR_SMALL_INTERVAL);
+    uint64_t key = get_tuple_key(msg_sender, next_anchor);
     scratchdata_type scratch_inst(_self, _self.value);
     auto itr = scratch_inst.find(key);
     eosio_assert(itr != scratch_inst.end(), "scratchpad not initialized");
 
-    // TODO: verify header.previous_hash == scratchpad.previous_block_hash
+    // TODO: verify header.previous_hash == scratchpad.last_block_hash
 
     // add difficulty to total_difficulty
     uint new_total_difficulty = itr->total_difficulty + difficulty;
 
     // append sha256(rlp{y}) to scratchpad.list
     capi_checksum256 rlp_sha_buffer = sha256(header_rlp.data(), header_rlp.size());
-    uint64_t rlp_sha = *((uint64_t *)rlp_sha.hash);
+    uint64_t rlp_sha = *((uint64_t *)rlp_sha_buffer.hash);
 
-    eosio.modify(itr, _self, [&](auto& s) {
-        s.previous_block_hash = 0; // TODO -  update to new hash
-        s.small_interval_list.push(rlp_sha);
-    }
+    scratch_inst.modify(itr, _self, [&](auto& s) {
+        s.last_block_hash = 0; // TODO -  update to new hash
+        s.small_interval_list.push_back(rlp_sha);
+    });
 }
 
 ACTION LongestChain::finalize(uint64_t msg_sender,
