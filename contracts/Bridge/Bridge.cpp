@@ -1,9 +1,12 @@
+#include "Bridge.hpp"
+
 #include "../Common/common.hpp"
 #include "../Common/rlp.hpp"
 #include "dag_merkle.hpp"
 #include "dag_sizes.h"
 #include "long_mult.hpp"
 #include "patricia_merkle.hpp"
+#include "longest_chain.hpp"
 
 #define ETHASH_EPOCH_LENGTH 30000U
 #define ETHASH_MIX_BYTES 128
@@ -39,66 +42,7 @@ struct header_info_struct {
 static uint64_t* dag_sizes_array[] = {dag_sizes_0, dag_sizes_1, dag_sizes_2,
                                       dag_sizes_3, dag_sizes_4};
 
-CONTRACT Bridge : public contract {
 
-    public:
-        using contract::contract;
-
-        ACTION relay(const vector<uint8_t>& header_rlp,
-                     const vector<uint8_t>& dags,
-                     const vector<uint8_t>& proofs,
-                     uint proof_length);
-
-        ACTION veriflongest(const vector<uint8_t>& header_hash);
-
-        ACTION checkreceipt(const vector<uint8_t>& header_rlp,
-                            const vector<uint8_t>& encoded_path,
-                            const vector<uint8_t>& receipt_rlp,
-                            const vector<uint8_t>& all_parent_nodes_rlps,
-                            const vector<uint>& all_parnet_rlp_sizes);
-
-        ACTION storeroots(uint64_t genesis_block_num,
-                          const vector<uint64_t>& epoch_nums,
-                          const vector<uint8_t>& dag_roots);
-
-        TABLE state {
-            uint64_t   headers_head;
-            uint128_t  headers_head_difficulty;
-            uint64_t   headers_head_block_num;
-            uint64_t   genesis_block_num;
-        };
-
-        TABLE roots {
-            uint64_t epoch_num;
-            bytes    root;
-            uint64_t primary_key() const { return epoch_num; }
-        };
-
-        TABLE headers {
-            // TODO - only 8B out of the hash, in production add 32B to result and compare
-            uint64_t         header_hash;
-            uint64_t         previous_hash;
-            uint128_t        total_difficulty;
-            uint64_t         block_num;
-            uint64_t primary_key() const { return header_hash; }
-        };
-
-        TABLE receipts {
-            // TODO - only 8B out of the hash, in production add 32B to result and compare
-            uint64_t receipt_header_hash;
-            uint64_t primary_key() const { return receipt_header_hash; }
-        };
-
-        typedef eosio::singleton<"state"_n, state> state_type;
-        typedef eosio::multi_index<"roots"_n, roots> roots_type;
-        typedef eosio::multi_index<"headers"_n, headers> headers_type;
-        typedef eosio::multi_index<"receipts"_n, receipts> receipts_type;
-
-
-    private:
-        void parse_header(struct header_info_struct* header_info, const bytes& header_rlp);
-        void store_header(struct header_info_struct* header_info);
-};
 
 uint32_t fnv_hash(uint32_t const x, uint32_t const y)
 {
@@ -239,7 +183,8 @@ void Bridge::parse_header(struct header_info_struct* header_info, const bytes& h
     header_info->expected_root = root_entry.root.data();
 }
 
-void Bridge::store_header(struct header_info_struct* header_info) {
+void Bridge::store_header(struct header_info_struct* header_info,
+                          const vector<uint8_t>& header_rlp) {
     state_type state_inst(_self, _self.value);
     headers_type headers_inst(_self, _self.value);
 
@@ -247,6 +192,17 @@ void Bridge::store_header(struct header_info_struct* header_info) {
     uint64_t previous_hash = crop(header_info->previous_hash);
     uint64_t block_num = header_info->block_num;
 
+    uint64_t msg_sender = 0; // TODO - actually get message sender and authenticate it
+
+    uint128_t difficulty_value = decode_number128(header_info->difficulty, header_info->difficulty_len);
+    storeheader(msg_sender,
+                block_num,
+                difficulty_value,
+                header_hash,
+                previous_hash,
+                header_rlp);
+
+/* old implementation:
     // calculate total difficulty
     uint128_t previous_total_difficulty;
 
@@ -290,6 +246,7 @@ void Bridge::store_header(struct header_info_struct* header_info) {
             s.block_num = block_num;
         });
     }
+ */
 }
 
 ACTION Bridge::veriflongest(const bytes& header_hash) {
@@ -363,7 +320,7 @@ ACTION Bridge::relay(const bytes& header_rlp,
     struct header_info_struct header_info;
     parse_header(&header_info, header_rlp);
     verify_header(&header_info, dags, proofs, proof_length);
-    store_header(&header_info);
+    store_header(&header_info, header_rlp);
 
     return;
 }
