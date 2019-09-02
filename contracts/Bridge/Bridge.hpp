@@ -79,7 +79,8 @@ CONTRACT Bridge : public contract {
                         uint64_t difficulty);
 
         void initscratch(uint64_t msg_sender,
-                         uint64_t anchor_block_num);
+                         uint64_t anchor_block_num,
+                         uint64_t previous_anchor_pointer);
 
         void storeheader(uint64_t msg_sender,
                          uint64_t block_num,
@@ -105,7 +106,7 @@ CONTRACT Bridge : public contract {
         // anchors are the headers that are maintained in permanent storage
         TABLE anchors {
             // related to data structure
-            uint64_t current; // running index
+            uint64_t current;
             uint64_t previous_small;
             uint64_t previous_large;
             uint64_t small_interval_list_hash; // sha256([sha256(rlp{z - 1}), sha256(rlp{z - 2}), …, sha256(rlp{z - 50})])
@@ -123,6 +124,7 @@ CONTRACT Bridge : public contract {
             uint64_t         last_block_hash; // for ethash verification
             uint128_t        total_difficulty;
             vector<uint64_t> small_interval_list;
+            uint64_t         previous_anchor_pointer;
             uint64_t primary_key() const { return anchor_sender_hash; }
         };
 

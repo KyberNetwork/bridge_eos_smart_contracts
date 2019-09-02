@@ -19,23 +19,28 @@ uint64_t round_up(uint64_t val, uint64_t denom) {
     return ((val + denom - 1) / denom) * denom;
 }
 
+uint64_t allocate_pointer(uint64_t header_hash) {
+    return 0; // TODO - implement running pointer as first stage
+}
+
 // set genesis anchor!!! so can start..
 void Bridge::setgenesis(uint64_t genesis_block_num,
                         uint64_t header_hash,
-                        uint64_t difficulty) {
+                        uint64_t difficulty) { // TODO: should difficulty be 0?
 
     // only authorized entity can set genesis
     require_auth(_self);
 
-    // init state
+    // init state table
     newstate_type state_inst(_self, _self.value);
 
     eosio_assert(genesis_block_num % ANCHOR_BIG_INTERVAL == 0,
                  "bad genesis block num resolution");
 
+    uint64_t current_pointer = allocate_pointer(header_hash);
     newstate initial_state = {
-            0,                 // last_issued_key
-            0,                 // anchors_head_difficulty
+            current_pointer,   // last_issued_key
+            difficulty,        // anchors_head_difficulty
             genesis_block_num, // anchors_head_block_num
             genesis_block_num  // genesis_block_num
     };
@@ -47,7 +52,7 @@ void Bridge::setgenesis(uint64_t genesis_block_num,
                  "scratchpad already for this anchor");
 
     anchors_inst.emplace(_self, [&](auto& s) {
-        s.current = 0; // running index
+        s.current = current_pointer;
         s.previous_small = 0;
         s.previous_large = 0;
         s.small_interval_list_hash = 0;
@@ -58,25 +63,34 @@ void Bridge::setgenesis(uint64_t genesis_block_num,
 }
 
 void Bridge::initscratch(uint64_t msg_sender,
-                         uint64_t anchor_block_num) {
+                         uint64_t anchor_block_num,
+                         uint64_t previous_anchor_pointer) {
 
     // make sure anchor_block_num is in ANCHOR_SMALL_INTERVAL resolution
     eosio_assert(anchor_block_num % ANCHOR_SMALL_INTERVAL == 0, "bad anchor resolution");
 
-    // make sure previous_anchor = anchor_block_num - ANCHOR_SMALL_INTERVAL is in anchors table
+    // get previous anchor
+    anchors_type anchors_inst(_self, _self.value);
+    auto previous_anchor_itr = anchors_inst.find(previous_anchor_pointer);
+    eosio_assert(previous_anchor_itr != anchors_inst.end(),
+                 "wrong previous anchor pointer");
+
+    // assert previous anchor pointer points to the correct block num
     uint64_t previous_anchor_block_num = anchor_block_num - ANCHOR_SMALL_INTERVAL;
-    // TODO - actually make sure
+    eosio_assert(previous_anchor_itr->block_num == previous_anchor_block_num,
+                 "wrong previous anchor block num");
 
     // make sure scratchpad is not allocated and allocate one
-    uint64_t key = get_tuple_key(msg_sender, anchor_block_num);
+    uint64_t tuple_key = get_tuple_key(msg_sender, anchor_block_num);
     scratchdata_type scratch_inst(_self, _self.value);
-    eosio_assert(scratch_inst.find(key) != scratch_inst.end(),
+    eosio_assert(scratch_inst.find(tuple_key) != scratch_inst.end(),
                  "scratchpad already for this anchor");
 
     scratch_inst.emplace(_self, [&](auto& s) {
-        s.anchor_sender_hash = key;
-        s.last_block_hash = 0; // TODO - set previous/last_block_hash to previous_anchor's sha3
-        s.total_difficulty = 0; // TODO - get from previous anchor.
+        s.anchor_sender_hash = tuple_key;
+        s.last_block_hash = previous_anchor_itr->header_hash;
+        s.total_difficulty = previous_anchor_itr->total_difficulty;
+        s.previous_anchor_pointer = previous_anchor_pointer;
 
         for( int i = 0; i < ANCHOR_SMALL_INTERVAL; i++) {
             s.small_interval_list.push_back(0);
@@ -93,10 +107,10 @@ void Bridge::storeheader(uint64_t msg_sender,
 
     // load scratchpad data for the tuple
     uint64_t next_anchor = round_up(block_num, ANCHOR_SMALL_INTERVAL);
-    uint64_t key = get_tuple_key(msg_sender, next_anchor);
+    uint64_t tuple_key = get_tuple_key(msg_sender, next_anchor);
 
     scratchdata_type scratch_inst(_self, _self.value);
-    auto itr = scratch_inst.find(key);
+    auto itr = scratch_inst.find(tuple_key);
     eosio_assert(itr != scratch_inst.end(), "scratchpad not initialized");
 
     // check new block is based on previous one
@@ -124,24 +138,28 @@ void Bridge::finalize(uint64_t msg_sender,
 
     // load scratchpad (make sure it exists)
     scratchdata_type scratch_inst(_self, _self.value);
-    uint64_t key = get_tuple_key(msg_sender, anchor_block_num);
+    uint64_t tuple_key = get_tuple_key(msg_sender, anchor_block_num);
 
     // get from scratchpad pointer to previous anchor
-    auto itr = scratch_inst.find(key);
-    eosio_assert(itr != scratch_inst.end(), "scratchpad not initialized");
+    auto scratch_itr = scratch_inst.find(tuple_key);
+    eosio_assert(scratch_itr != scratch_inst.end(), "scratchpad not initialized");
 
-    // TODO: actually get and set previous_small
+    // load previous anchor in order to extend it
+    anchors_type anchors_inst(_self, _self.value);
+    auto previous_anchor_itr = anchors_inst.find(scratch_itr->previous_anchor_pointer);
+    eosio_assert(previous_anchor_itr != anchors_inst.end(),
+                 "internal error, wrong previous anchor pointer");
 
-    // traverse back on anchor list and set previous_large
-
-    // TODO: allocate index
-
+    // TODO: traverse back on anchor list and set previous_large
     // TODO: calculate small_interval_list_hash from list
 
-    // TODO: get header_hash which is scratchpad.last_block_hash
-
-    // TODO: get total_difficulty which is scratchpad.total_difficulty
-
-    // TODO: get block_num from input
-
+    anchors_inst.emplace(_self, [&](auto& s) {
+        s.current = allocate_pointer(scratch_itr->last_block_hash);
+        s.previous_small = scratch_itr->previous_anchor_pointer;
+        s.previous_large = 0; // TODO
+        s.small_interval_list_hash = 0; // TODO
+        s.header_hash = scratch_itr->last_block_hash;
+        s.total_difficulty = scratch_itr->total_difficulty;
+        s.block_num = anchor_block_num;
+    });
 }
