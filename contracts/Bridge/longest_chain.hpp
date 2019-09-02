@@ -150,14 +150,32 @@ void Bridge::finalize(uint64_t msg_sender,
     eosio_assert(previous_anchor_itr != anchors_inst.end(),
                  "internal error, wrong previous anchor pointer");
 
-    // TODO: traverse back on anchor list and set previous_large
-    // TODO: calculate small_interval_list_hash from list
+    // traverse back on anchor list and set previous_large
+    uint blocks_to_traverse = ANCHOR_BIG_INTERVAL - ANCHOR_SMALL_INTERVAL; // already went backwards once
+    if (anchor_block_num > blocks_to_traverse) {
+        while (blocks_to_traverse > 0) {
+            auto itr = anchors_inst.find(previous_anchor_itr->previous_small);
+            auto previous_anchor_itr = itr;
+            eosio_assert(previous_anchor_itr != anchors_inst.end(),
+                         "internal error on traversing backwards");
+            blocks_to_traverse -= ANCHOR_SMALL_INTERVAL;
+        }
+    }
+    uint previous_large = previous_anchor_itr->current;
 
+    // calculate small_interval_list_hash from list
+    eosio_assert(scratch_itr->small_interval_list.size() == ANCHOR_SMALL_INTERVAL,
+                 "wrong number of headers in scratchpad");
+    capi_checksum256 sha_buffer = sha256((uint8_t *)(scratch_itr->small_interval_list.data()),
+                                         8 * ANCHOR_SMALL_INTERVAL);
+    uint64_t small_interval_list_hash = *((uint64_t *)sha_buffer.hash); // TODO: change to crop()
+
+    // store new anchor
     anchors_inst.emplace(_self, [&](auto& s) {
         s.current = allocate_pointer(scratch_itr->last_block_hash);
         s.previous_small = scratch_itr->previous_anchor_pointer;
-        s.previous_large = 0; // TODO
-        s.small_interval_list_hash = 0; // TODO
+        s.previous_large = previous_large;
+        s.small_interval_list_hash = small_interval_list_hash;
         s.header_hash = scratch_itr->last_block_hash;
         s.total_difficulty = scratch_itr->total_difficulty;
         s.block_num = anchor_block_num;
