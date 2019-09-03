@@ -92,9 +92,9 @@ CONTRACT Bridge : public contract {
         void finalize(uint64_t msg_sender,
                       uint64_t anchor_block_num);
 
-        void veriflongest(const vector<uint8_t>& header_hash,
+        void veriflongest(uint64_t header_rlp_sha256,
                           uint  block_num,
-                          vector<uint64_t> small_interval_list);
+                          vector<uint64_t> interval_list_proof);
 
         TABLE newstate {
             uint64_t   last_issued_key;
