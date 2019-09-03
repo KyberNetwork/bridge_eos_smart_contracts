@@ -100,6 +100,7 @@ CONTRACT Bridge : public contract {
             uint64_t   last_issued_key;
             uint128_t  anchors_head_difficulty;
             uint64_t   anchors_head_block_num;
+            uint64_t   anchors_head_pointer;
             uint64_t   genesis_block_num;
         };
 

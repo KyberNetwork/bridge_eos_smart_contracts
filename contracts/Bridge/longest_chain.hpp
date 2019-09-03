@@ -11,7 +11,7 @@ uint64_t get_tuple_key(uint64_t msg_sender, uint64_t anchor_block_num) {
     memcpy(input, (uint8_t*)msg_sender, 8);
     memcpy(input + 8, (uint8_t*)anchor_block_num, 8);
     capi_checksum256 key_buffer = sha256(input, 16);
-    uint64_t key = *((uint64_t *)key_buffer.hash);
+    uint64_t key = crop(key_buffer.hash);
     return key;
 }
 
@@ -42,14 +42,15 @@ void Bridge::setgenesis(uint64_t genesis_block_num,
             current_pointer,   // last_issued_key
             difficulty,        // anchors_head_difficulty
             genesis_block_num, // anchors_head_block_num
+            current_pointer, // anchors_head_pointer
             genesis_block_num  // genesis_block_num
     };
     state_inst.set(initial_state, _self);
 
     // init anchors table
     anchors_type anchors_inst(_self, _self.value);
-    eosio_assert(anchors_inst.find(0) != anchors_inst.end(),
-                 "scratchpad already for this anchor");
+    eosio_assert(anchors_inst.find(genesis_block_num) != anchors_inst.end(),
+                 "anchor already exists");
 
     anchors_inst.emplace(_self, [&](auto& s) {
         s.current = current_pointer;
@@ -63,7 +64,7 @@ void Bridge::setgenesis(uint64_t genesis_block_num,
 }
 
 void Bridge::initscratch(uint64_t msg_sender,
-                         uint64_t anchor_block_num,
+                         uint64_t anchor_block_num, // anchor to connect to + ANCHOR_SMALL_INTERVAL
                          uint64_t previous_anchor_pointer) {
 
     // make sure anchor_block_num is in ANCHOR_SMALL_INTERVAL resolution
@@ -84,7 +85,7 @@ void Bridge::initscratch(uint64_t msg_sender,
     uint64_t tuple_key = get_tuple_key(msg_sender, anchor_block_num);
     scratchdata_type scratch_inst(_self, _self.value);
     eosio_assert(scratch_inst.find(tuple_key) != scratch_inst.end(),
-                 "scratchpad already for this anchor");
+                 "scratchpad already exists for this anchor");
 
     scratch_inst.emplace(_self, [&](auto& s) {
         s.anchor_sender_hash = tuple_key;
@@ -119,9 +120,9 @@ void Bridge::storeheader(uint64_t msg_sender,
     // add difficulty to total_difficulty
     uint128_t new_total_difficulty = itr->total_difficulty + difficulty;
 
-    // append sha256(rlp{y}) to scratchpad.list
+    // append sha256 of header rlp to scratchpad's list
     capi_checksum256 rlp_sha_buffer = sha256(header_rlp.data(), header_rlp.size());
-    uint64_t rlp_sha = *((uint64_t *)rlp_sha_buffer.hash);
+    uint64_t rlp_sha = crop(rlp_sha_buffer.hash);
 
     // store in scratchpad
     scratch_inst.modify(itr, _self, [&](auto& s) {
@@ -133,6 +134,7 @@ void Bridge::storeheader(uint64_t msg_sender,
 
 void Bridge::finalize(uint64_t msg_sender,
                       uint64_t anchor_block_num) {
+
     eosio_assert(anchor_block_num % ANCHOR_SMALL_INTERVAL == 0,
                  "wrong block number resolution");
 
@@ -167,12 +169,14 @@ void Bridge::finalize(uint64_t msg_sender,
     eosio_assert(scratch_itr->small_interval_list.size() == ANCHOR_SMALL_INTERVAL,
                  "wrong number of headers in scratchpad");
     capi_checksum256 sha_buffer = sha256((uint8_t *)(scratch_itr->small_interval_list.data()),
-                                         8 * ANCHOR_SMALL_INTERVAL);
-    uint64_t small_interval_list_hash = *((uint64_t *)sha_buffer.hash); // TODO: change to crop()
+                                         sizeof(uint64_t) * ANCHOR_SMALL_INTERVAL);
+    uint64_t small_interval_list_hash = crop(sha_buffer.hash);
+
+    uint current_anchor_pointer = allocate_pointer(scratch_itr->last_block_hash);
 
     // store new anchor
     anchors_inst.emplace(_self, [&](auto& s) {
-        s.current = allocate_pointer(scratch_itr->last_block_hash);
+        s.current = current_anchor_pointer;
         s.previous_small = scratch_itr->previous_anchor_pointer;
         s.previous_large = previous_large;
         s.small_interval_list_hash = small_interval_list_hash;
@@ -180,4 +184,14 @@ void Bridge::finalize(uint64_t msg_sender,
         s.total_difficulty = scratch_itr->total_difficulty;
         s.block_num = anchor_block_num;
     });
+
+    // update pointer to list head if needed
+    newstate_type state_inst(_self, _self.value);
+    auto s = state_inst.get();
+    if( scratch_itr->total_difficulty > s.anchors_head_difficulty){
+        s.anchors_head_difficulty = scratch_itr->total_difficulty;
+        s.anchors_head_block_num = anchor_block_num;
+        s.anchors_head_pointer = current_anchor_pointer;
+        state_inst.set(s, _self);
+    }
 }
