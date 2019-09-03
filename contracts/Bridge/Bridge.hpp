@@ -96,6 +96,9 @@ CONTRACT Bridge : public contract {
                           uint  block_num,
                           vector<uint64_t> interval_list_proof);
 
+        // internal in data structure module:
+        uint64_t allocate_pointer(uint64_t header_hash);
+
         TABLE newstate {
             uint64_t   last_issued_key;
             uint128_t  anchors_head_difficulty;

@@ -23,8 +23,18 @@ uint64_t round_down(uint64_t val, uint64_t denom) {
     return (val / denom) * denom;
 }
 
-uint64_t allocate_pointer(uint64_t header_hash) {
-    return 0; // TODO - implement running pointer as first stage
+uint64_t Bridge::allocate_pointer(uint64_t header_hash) {
+    newstate_type state_inst(_self, _self.value);
+    auto s = state_inst.get();
+    auto issued_pointer = ++s.last_issued_key;
+    state_inst.set(s, _self);
+
+    /* TODO - since on finalize() the user needs to input the anchor's pointer, need to:
+        * Hold an on chain mapping of 8B of hash to list of indexes
+        * Off chain client can traverse/check what is the right index.
+    */
+
+    return issued_pointer;
 }
 
 uint64_t sha256_of_list(const vector<uint64_t> &list) {
