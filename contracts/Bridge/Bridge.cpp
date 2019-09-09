@@ -185,9 +185,10 @@ void Bridge::parse_header(struct header_info_struct* header_info, const bytes& h
 
 void Bridge::store_header(struct header_info_struct* header_info,
                           const vector<uint8_t>& header_rlp) {
+/*
     state_type state_inst(_self, _self.value);
     headers_type headers_inst(_self, _self.value);
-
+*/
     uint64_t header_hash = crop(header_info->header_hash.hash);
     uint64_t previous_hash = crop(header_info->previous_hash);
     uint64_t block_num = header_info->block_num;
@@ -195,6 +196,7 @@ void Bridge::store_header(struct header_info_struct* header_info,
     uint64_t msg_sender = 0; // TODO - actually get message sender and authenticate it
 
     uint128_t difficulty_value = decode_number128(header_info->difficulty, header_info->difficulty_len);
+
     storeheader(msg_sender,
                 block_num,
                 difficulty_value,
@@ -249,6 +251,7 @@ void Bridge::store_header(struct header_info_struct* header_info,
  */
 }
 
+/*
 ACTION Bridge::veriflongest(const bytes& header_hash) {
     state_type state_inst(_self, _self.value);
     headers_type headers_inst(_self, _self.value);
@@ -273,15 +276,18 @@ ACTION Bridge::veriflongest(const bytes& header_hash) {
     eosio_assert(false, "not on longest path");
 
 }
+*/
 
-ACTION Bridge::storeroots(uint64_t genesis_block_num,
+ACTION Bridge::storeroots(uint64_t genesis_block_num, // TODO - unused parameter, remove
                           const vector<uint64_t>& epoch_nums,
                           const bytes& dag_roots){
 
     require_auth(_self);
+/*
     state_type state_inst(_self, _self.value);
     state initial_state = {0, 0, 0, genesis_block_num};
     state_inst.set(initial_state, _self);
+*/
 
     eosio_assert(epoch_nums.size() * MERKLE_ELEMENT_LEN == dag_roots.size(),
                  "epochs and roots vectors mismatch");
@@ -319,7 +325,7 @@ ACTION Bridge::relay(const bytes& header_rlp,
 
     struct header_info_struct header_info;
     parse_header(&header_info, header_rlp);
-    verify_header(&header_info, dags, proofs, proof_length);
+    // TODO - reenable - verify_header(&header_info, dags, proofs, proof_length);
     store_header(&header_info, header_rlp);
 
     return;
@@ -363,7 +369,7 @@ extern "C" {
     void apply(uint64_t receiver, uint64_t code, uint64_t action) {
         if (code == receiver){
             switch( action ) {
-                EOSIO_DISPATCH_HELPER( Bridge, (relay)(checkreceipt)(storeroots))
+                EOSIO_DISPATCH_HELPER( Bridge, (relay)(checkreceipt)(storeroots)(setgenesis)(initscratch)(finalize))
             }
         }
         eosio_exit(0);

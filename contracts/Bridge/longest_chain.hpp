@@ -3,16 +3,27 @@
 
 #include "Bridge.hpp"
 
-#define ANCHOR_SMALL_INTERVAL 50
+#define ANCHOR_SMALL_INTERVAL 5
 #define ANCHOR_BIG_INTERVAL   1000
 
 uint64_t get_tuple_key(uint64_t msg_sender, uint64_t anchor_block_num) {
     uint8_t input[16];
-    memcpy(input, (uint8_t*)msg_sender, 8);
-    memcpy(input + 8, (uint8_t*)anchor_block_num, 8);
+
+    // TODO - for some reason this doesn't work -
+    // memcpy(input, (uint8_t *)msg_sender, 8);
+    // memcpy(input, (uint8_t *)anchor_block_num, 8);
+
+    for (uint i = 0; i < 8; i++) {
+        input[i] = (msg_sender >> (i * 8)) & 0xFF;
+    }
+    for (uint i = 0; i < 8; i++) {
+        input[i + 8] = (anchor_block_num >> (i * 8)) & 0xFF;
+    }
+
     capi_checksum256 key_buffer = sha256(input, 16);
     uint64_t key = crop(key_buffer.hash);
     return key;
+
 }
 
 uint64_t round_up(uint64_t val, uint64_t denom) {
@@ -43,7 +54,6 @@ uint64_t sha256_of_list(const vector<uint64_t> &list) {
     return crop(sha_buffer.hash);;
 }
 
-// set genesis anchor!!! so can start..
 void Bridge::setgenesis(uint64_t genesis_block_num,
                         uint64_t header_hash,
                         uint64_t difficulty) { // TODO: should difficulty be 0?
@@ -54,10 +64,10 @@ void Bridge::setgenesis(uint64_t genesis_block_num,
     // init state table
     newstate_type state_inst(_self, _self.value);
 
-    eosio_assert(genesis_block_num % ANCHOR_BIG_INTERVAL == 0,
+    eosio_assert(genesis_block_num % ANCHOR_BIG_INTERVAL == 1,
                  "bad genesis block num resolution");
 
-    uint64_t current_pointer = allocate_pointer(header_hash);
+    uint64_t current_pointer = 0; //can not allocate if state is not there - allocate_pointer(header_hash);
     newstate initial_state = {
             current_pointer,   // last_issued_key
             difficulty,        // anchors_head_difficulty
@@ -69,7 +79,7 @@ void Bridge::setgenesis(uint64_t genesis_block_num,
 
     // init anchors table
     anchors_type anchors_inst(_self, _self.value);
-    eosio_assert(anchors_inst.find(genesis_block_num) != anchors_inst.end(),
+    eosio_assert(anchors_inst.find(genesis_block_num) == anchors_inst.end(),
                  "anchor already exists");
 
     anchors_inst.emplace(_self, [&](auto& s) {
@@ -79,7 +89,7 @@ void Bridge::setgenesis(uint64_t genesis_block_num,
         s.small_interval_list_hash = 0;
         s.header_hash = header_hash; // sha3(rlp{header}), for verifying previous hash
         s.total_difficulty = difficulty;
-        s.block_num = genesis_block_num;
+        s.block_num = genesis_block_num - 1;
     });
 }
 
@@ -96,15 +106,18 @@ void Bridge::initscratch(uint64_t msg_sender,
     eosio_assert(previous_anchor_itr != anchors_inst.end(),
                  "wrong previous anchor pointer");
 
+    print("found previous_anchor_pointer ", previous_anchor_pointer);
+
     // assert previous anchor pointer points to the correct block num
     uint64_t previous_anchor_block_num = anchor_block_num - ANCHOR_SMALL_INTERVAL;
+    print("found previous_anchor_block_num ", previous_anchor_block_num);
     eosio_assert(previous_anchor_itr->block_num == previous_anchor_block_num,
                  "wrong previous anchor block num");
 
     // make sure scratchpad is not allocated and allocate one
     uint64_t tuple_key = get_tuple_key(msg_sender, anchor_block_num);
     scratchdata_type scratch_inst(_self, _self.value);
-    eosio_assert(scratch_inst.find(tuple_key) != scratch_inst.end(),
+    eosio_assert(scratch_inst.find(tuple_key) == scratch_inst.end(),
                  "scratchpad already exists for this anchor");
 
     scratch_inst.emplace(_self, [&](auto& s) {
@@ -113,9 +126,11 @@ void Bridge::initscratch(uint64_t msg_sender,
         s.total_difficulty = previous_anchor_itr->total_difficulty;
         s.previous_anchor_pointer = previous_anchor_pointer;
 
+        /*
         for( int i = 0; i < ANCHOR_SMALL_INTERVAL; i++) {
             s.small_interval_list.push_back(0);
         }
+        */
     });
 }
 
@@ -128,14 +143,20 @@ void Bridge::storeheader(uint64_t msg_sender,
 
     // load scratchpad data for the tuple
     uint64_t next_anchor = round_up(block_num, ANCHOR_SMALL_INTERVAL);
+    print("next_anchor ", next_anchor);
     uint64_t tuple_key = get_tuple_key(msg_sender, next_anchor);
+    print("tuple_key ", tuple_key);
 
     scratchdata_type scratch_inst(_self, _self.value);
     auto itr = scratch_inst.find(tuple_key);
     eosio_assert(itr != scratch_inst.end(), "scratchpad not initialized");
 
-    // check new block is based on previous one
-    eosio_assert(previous_hash == itr->last_block_hash, "wrong previous hash");
+    print("got scratchpad");
+
+    if (false) { // TODO - handle for genesis block
+        // check new block is based on previous one
+        eosio_assert(previous_hash == itr->last_block_hash, "wrong previous hash");
+    }
 
     // add difficulty to total_difficulty
     uint128_t new_total_difficulty = itr->total_difficulty + difficulty;
@@ -154,6 +175,7 @@ void Bridge::storeheader(uint64_t msg_sender,
 
 void Bridge::finalize(uint64_t msg_sender,
                       uint64_t anchor_block_num) {
+    print("finalize()");
 
     eosio_assert(anchor_block_num % ANCHOR_SMALL_INTERVAL == 0,
                  "wrong block number resolution");
@@ -173,8 +195,15 @@ void Bridge::finalize(uint64_t msg_sender,
                  "internal error, wrong previous anchor pointer");
 
     // traverse back on anchor list and set previous_large
+    uint previous_large = 0;
+    print("here1");
+
+    // get distance from genesis
+    newstate_type state_inst1(_self, _self.value);
+    auto s = state_inst1.get();
+    uint distance_from_genesis = anchor_block_num - s.genesis_block_num;
     uint blocks_to_traverse = ANCHOR_BIG_INTERVAL - ANCHOR_SMALL_INTERVAL; // already went backwards once
-    if (anchor_block_num > blocks_to_traverse) {
+    if (distance_from_genesis > blocks_to_traverse) {
         while (blocks_to_traverse > 0) {
             auto itr = anchors_inst.find(previous_anchor_itr->previous_small);
             auto previous_anchor_itr = itr;
@@ -182,15 +211,18 @@ void Bridge::finalize(uint64_t msg_sender,
                          "internal error on traversing backwards");
             blocks_to_traverse -= ANCHOR_SMALL_INTERVAL;
         }
+        print("here2");
+        previous_large = previous_anchor_itr->current;
     }
-    uint previous_large = previous_anchor_itr->current;
 
+    print("scratch_itr->small_interval_list.size()", scratch_itr->small_interval_list.size());
     // calculate small_interval_list_hash from list
     eosio_assert(scratch_itr->small_interval_list.size() == ANCHOR_SMALL_INTERVAL,
                  "wrong number of headers in scratchpad");
     uint64_t small_interval_list_hash = sha256_of_list(scratch_itr->small_interval_list);
 
     uint current_anchor_pointer = allocate_pointer(scratch_itr->last_block_hash);
+    print("current_anchor_pointer ", current_anchor_pointer);
 
     // store new anchor
     anchors_inst.emplace(_self, [&](auto& s) {
@@ -204,14 +236,18 @@ void Bridge::finalize(uint64_t msg_sender,
     });
 
     // update pointer to list head if needed
-    newstate_type state_inst(_self, _self.value);
-    auto s = state_inst.get();
+    newstate_type state_inst2(_self, _self.value);
+    s = state_inst2.get();
     if( scratch_itr->total_difficulty > s.anchors_head_difficulty){
         s.anchors_head_difficulty = scratch_itr->total_difficulty;
         s.anchors_head_block_num = anchor_block_num;
         s.anchors_head_pointer = current_anchor_pointer;
-        state_inst.set(s, _self);
+        state_inst2.set(s, _self);
     }
+
+    // clean up scratchpad
+    scratch_inst.erase(scratch_itr);
+
 }
 
 void Bridge::veriflongest(uint64_t header_rlp_sha256,
