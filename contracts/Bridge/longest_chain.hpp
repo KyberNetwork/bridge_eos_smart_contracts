@@ -7,13 +7,19 @@
 #define ANCHOR_BIG_INTERVAL   10
 #define INVALID (1LL << 62) - 1
 
+uint64_t sha_and_crop(const uint8_t *input, uint size) {
+    capi_checksum256 sha_csum = sha256(input, size);
+    return crop(sha_csum.hash);
+}
+
+uint64_t sha256_of_list(const vector<uint64_t> &list) {
+    return sha_and_crop((uint8_t *)(list.data()), sizeof(uint64_t) * list.size());
+}
+
 uint64_t get_tuple_key(uint64_t msg_sender, uint64_t anchor_block_num) {
     uint8_t input[16];
 
-    // TODO - for some reason this doesn't work -
-    // memcpy(input, (uint8_t *)msg_sender, 8);
-    // memcpy(input, (uint8_t *)anchor_block_num, 8);
-
+    // TODO - for some reason this doesn't work - memcpy(input, (uint8_t *)anchor_block_num, 8);
     for (uint i = 0; i < 8; i++) {
         input[i] = (msg_sender >> (i * 8)) & 0xFF;
     }
@@ -21,10 +27,7 @@ uint64_t get_tuple_key(uint64_t msg_sender, uint64_t anchor_block_num) {
         input[i + 8] = (anchor_block_num >> (i * 8)) & 0xFF;
     }
 
-    capi_checksum256 key_buffer = sha256(input, 16);
-    uint64_t key = crop(key_buffer.hash);
-    return key;
-
+    return sha_and_crop(input, 16);
 }
 
 uint64_t round_up(uint64_t val, uint64_t denom) {
@@ -49,11 +52,6 @@ uint64_t Bridge::allocate_pointer(uint64_t header_hash) {
     return issued_pointer;
 }
 
-uint64_t sha256_of_list(const vector<uint64_t> &list) {
-    capi_checksum256 sha_buffer = sha256((uint8_t *)(list.data()),
-                                         sizeof(uint64_t) * list.size());
-    return crop(sha_buffer.hash);;
-}
 
 void Bridge::setgenesis(uint64_t genesis_block_num,
                         uint64_t header_hash,
@@ -61,9 +59,7 @@ void Bridge::setgenesis(uint64_t genesis_block_num,
     print("setgenesis with genesis block num ", genesis_block_num);
 
     require_auth(_self); // only authorized entity can set genesis
-
-    eosio_assert(genesis_block_num % ANCHOR_BIG_INTERVAL == 1,
-                 "bad genesis block num resolution");
+    eosio_assert(genesis_block_num % ANCHOR_BIG_INTERVAL == 1, "bad genesis block resolution");
 
     newstate_type state_inst(_self, _self.value);
     uint64_t current_pointer = 0; // can not allocate if state is not initialized
@@ -84,7 +80,7 @@ void Bridge::setgenesis(uint64_t genesis_block_num,
         s.current = current_pointer;
         s.previous_small = INVALID;
         s.previous_large = INVALID;
-        s.small_interval_list_hash = 0;
+        s.list_hash = 0;
         s.header_hash = header_hash; // sha3(rlp{header}), for verifying previous hash
         s.total_difficulty = difficulty;
         s.block_num = genesis_block_num - 1;
@@ -146,8 +142,7 @@ void Bridge::storeheader(uint64_t msg_sender,
     uint128_t new_total_difficulty = itr->total_difficulty + difficulty;
 
     // append sha256 of header rlp to scratchpad's list
-    capi_checksum256 rlp_sha_buffer = sha256(header_rlp.data(), header_rlp.size());
-    uint64_t rlp_sha = crop(rlp_sha_buffer.hash);
+    uint64_t rlp_sha = sha_and_crop(header_rlp.data(), header_rlp.size());
 
     // store in scratchpad
     scratch_inst.modify(itr, _self, [&](auto& s) {
@@ -171,7 +166,7 @@ void Bridge::finalize(uint64_t msg_sender,
 
     // calculate small_interval list hash
     eosio_assert(scratch_itr->small_interval_list.size() == ANCHOR_SMALL_INTERVAL, "wrong list size");
-    uint64_t small_interval_list_hash = sha256_of_list(scratch_itr->small_interval_list);
+    uint64_t list_hash = sha256_of_list(scratch_itr->small_interval_list);
 
     // traverse back on anchor list and set previous_large
     uint blocks_to_traverse = anchor_block_num % ANCHOR_BIG_INTERVAL;
@@ -184,8 +179,8 @@ void Bridge::finalize(uint64_t msg_sender,
 
     // continue traversing to last anchor that is in big interval resolution
     while (blocks_to_traverse) {
-        auto itr = anchors_inst.find(traverse_itr->previous_small);
-        traverse_itr = itr;
+        auto tmp_itr = anchors_inst.find(traverse_itr->previous_small);
+        traverse_itr = tmp_itr; // to avoid compilation error
         blocks_to_traverse -= ANCHOR_SMALL_INTERVAL;
     }
 
@@ -196,7 +191,7 @@ void Bridge::finalize(uint64_t msg_sender,
         s.current = current_anchor_pointer;
         s.previous_small = scratch_itr->previous_anchor_pointer;
         s.previous_large = traverse_itr->current;
-        s.small_interval_list_hash = small_interval_list_hash;
+        s.list_hash = list_hash;
         s.header_hash = scratch_itr->last_block_hash;
         s.total_difficulty = scratch_itr->total_difficulty;
         s.block_num = anchor_block_num;
@@ -220,10 +215,9 @@ void Bridge::veriflongest(uint64_t header_rlp_sha256,
                           uint  block_num,
                           vector<uint64_t> interval_list_proof) {
 
-    //verify header_rlp_sha256 in list
-    uint place_in_list = block_num % ANCHOR_SMALL_INTERVAL;
-    eosio_assert(header_rlp_sha256 == interval_list_proof[block_num],
-                 "given sha256 of header not in given proof in place deducted from block num");
+    // verify header_rlp_sha256 in list
+    uint index = (block_num - 1) % ANCHOR_SMALL_INTERVAL; // list holds block 1,2..
+    eosio_assert(header_rlp_sha256 == interval_list_proof[index], "header sha256 not found");
 
     // start process of finding adjacent node that is a multiplication of small interval
     newstate_type state_inst(_self, _self.value);
@@ -235,24 +229,20 @@ void Bridge::veriflongest(uint64_t header_rlp_sha256,
     anchors_type anchors_inst(_self, _self.value);
     auto itr = anchors_inst.find(running_pointer);
     while (running_block_num > round_up(block_num, ANCHOR_BIG_INTERVAL)) {
-        auto previous_anchor_itr = anchors_inst.find(itr->previous_large);
-        auto itr = previous_anchor_itr; // to avoid compilation error
+        auto tmp_itr = anchors_inst.find(itr->previous_large);
+        itr = tmp_itr; // to avoid compilation error
         running_pointer = itr->previous_large;
     }
 
-    // traverse to closest smallest anchor in small interval resolution
-    itr = anchors_inst.find(running_pointer);
-    while (running_block_num > round_down(block_num, ANCHOR_SMALL_INTERVAL)) {
-        auto previous_anchor_itr = anchors_inst.find(itr->previous_small);
-        auto itr = previous_anchor_itr; // to avoid compilation error
+    // traverse to closest larger anchor in small interval resolution
+    while (running_block_num > round_up(block_num, ANCHOR_SMALL_INTERVAL)) {
+        auto tmp_itr = anchors_inst.find(itr->previous_small);
+        itr = tmp_itr; // to avoid compilation error
         running_pointer = itr->previous_small;
     }
 
-    itr = anchors_inst.find(running_pointer);
-
     // verify stored sha256(list) is equal to given sha256 list proof
     uint64_t list_proof_sha256 = sha256_of_list(interval_list_proof);
-    eosio_assert(list_proof_sha256 == itr->small_interval_list_hash,
-                 "given list does not hash to stored hash value");
+    eosio_assert(list_proof_sha256 == itr->list_hash, "given list hash diff with stored list hash");
 
 }

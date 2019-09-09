@@ -113,7 +113,7 @@ CONTRACT Bridge : public contract {
             uint64_t current;
             uint64_t previous_small;
             uint64_t previous_large;
-            uint64_t small_interval_list_hash; // sha256([sha256(rlp{z - 1}), sha256(rlp{z - 2}), …, sha256(rlp{z - 50})])
+            uint64_t list_hash; // sha256([sha256(rlp{z - 1}), sha256(rlp{z - 2}), …, sha256(rlp{z - 50})])
 
             // related to verifying ethash
             uint64_t  header_hash; // sha3(rlp{header}), for verifying previous hash
