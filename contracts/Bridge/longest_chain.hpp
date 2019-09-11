@@ -38,6 +38,14 @@ uint64_t round_down(uint64_t val, uint64_t denom) {
     return (val / denom) * denom;
 }
 
+uint64_t parseBuff(uint8_t buff[]) {
+    uint64_t result = 0;
+    for(int i = 0; i < 8; i++){
+        result |= (((uint64_t)buff[i]) << (56 - i * 8));
+    }
+    return result;
+}
+
 uint64_t Bridge::allocate_pointer(uint64_t header_hash) {
     newstate_type state_inst(_self, _self.value);
     auto s = state_inst.get();
@@ -184,6 +192,19 @@ void Bridge::finalize(uint64_t msg_sender,
         blocks_to_traverse -= ANCHOR_SMALL_INTERVAL;
     }
 
+    // TODO - remove tmp code:
+    /*
+    if (anchor_block_num == 8123010) {
+        for(int i = 0; i < scratch_itr->small_interval_list.size(); i++) {
+            print(i);
+            print(":");
+            print(scratch_itr->small_interval_list[i]);
+            print("\n");
+        }
+        print("list_hash: ", list_hash);
+    }
+    */
+
     // store new anchor
     uint current_anchor_pointer = allocate_pointer(scratch_itr->last_block_hash);
     print("current_anchor_pointer ", current_anchor_pointer);
@@ -211,13 +232,24 @@ void Bridge::finalize(uint64_t msg_sender,
     scratch_inst.erase(scratch_itr);
 }
 
-void Bridge::veriflongest(uint64_t header_rlp_sha256,
-                          uint  block_num,
-                          vector<uint64_t> interval_list_proof) {
+// NOTE: byte vectors are used instead of uint64_t since actually not all 2^64 range is supported.
+ACTION Bridge::veriflongest(vector<uint8_t>& header_rlp_sha256,
+                            uint64_t block_num,
+                            vector<uint8_t>& interval_list_proof) {
+    print("veriflongest for block num ", block_num);
+
+    // TODO: remove the need for parsing buffer on-chain by arranging input conveniently for the contract.
+    auto header_sha256 = parseBuff(header_rlp_sha256.data());
+
+    // TODO: remove here as well, this is very cpu consuming
+    vector<uint64_t> proof(ANCHOR_SMALL_INTERVAL);
+    for(int k = 0; k < ANCHOR_SMALL_INTERVAL; k++) {
+        proof[k] = parseBuff((uint8_t *)(&interval_list_proof[k * 8]));
+    }
 
     // verify header_rlp_sha256 in list
-    uint index = (block_num - 1) % ANCHOR_SMALL_INTERVAL; // list holds block 1,2..
-    eosio_assert(header_rlp_sha256 == interval_list_proof[index], "header sha256 not found");
+    uint index = (block_num - 1) % ANCHOR_SMALL_INTERVAL;
+    eosio_assert(header_sha256 == proof[index], "header sha256 not found");
 
     // start process of finding adjacent node that is a multiplication of small interval
     newstate_type state_inst(_self, _self.value);
@@ -228,10 +260,12 @@ void Bridge::veriflongest(uint64_t header_rlp_sha256,
     // traverse to closest larger anchor in large interval resolution
     anchors_type anchors_inst(_self, _self.value);
     auto itr = anchors_inst.find(running_pointer);
+
     while (running_block_num > round_up(block_num, ANCHOR_BIG_INTERVAL)) {
         auto tmp_itr = anchors_inst.find(itr->previous_large);
         itr = tmp_itr; // to avoid compilation error
         running_pointer = itr->previous_large;
+        running_block_num = itr->block_num;
     }
 
     // traverse to closest larger anchor in small interval resolution
@@ -239,10 +273,11 @@ void Bridge::veriflongest(uint64_t header_rlp_sha256,
         auto tmp_itr = anchors_inst.find(itr->previous_small);
         itr = tmp_itr; // to avoid compilation error
         running_pointer = itr->previous_small;
+        running_block_num = itr->block_num;
     }
 
     // verify stored sha256(list) is equal to given sha256 list proof
-    uint64_t list_proof_sha256 = sha256_of_list(interval_list_proof);
+    uint64_t list_proof_sha256 = sha256_of_list(proof);
     eosio_assert(list_proof_sha256 == itr->list_hash, "given list hash diff with stored list hash");
 
 }

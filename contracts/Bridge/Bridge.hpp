@@ -85,16 +85,16 @@ CONTRACT Bridge : public contract {
         ACTION finalize(uint64_t msg_sender,
                         uint64_t anchor_block_num);
 
+        ACTION veriflongest(vector<uint8_t>& header_rlp_sha256,
+                            uint64_t  block_num,
+                            vector<uint8_t>& interval_list_proof);
+
         void storeheader(uint64_t msg_sender,
                          uint64_t block_num,
                          uint128_t difficulty,
                          uint64_t header_hash,
                          uint64_t previous_hash,
                          const vector<uint8_t>& header_rlp);
-
-        void veriflongest(uint64_t header_rlp_sha256,
-                          uint  block_num,
-                          vector<uint64_t> interval_list_proof);
 
         // internal in data structure module:
         uint64_t allocate_pointer(uint64_t header_hash);
