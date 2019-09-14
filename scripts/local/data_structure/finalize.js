@@ -19,11 +19,11 @@ async function main (){
     bridgeAsBridge = await bridgeData.eos.contract("bridge");
     bridgeAsRelayer = await relayerData.eos.contract("bridge");
 
-    await bridgeAsBridge.finalize({
-        msg_sender : 0,
-        anchor_block_num : process.argv[2], //8123003,
+    await bridgeAsRelayer.finalize({
+        msg_sender : relayerData.account,
+        anchor_block_num : process.argv[2],
     },
-    { authorization: [`${bridgeData.account}@active`] });
+    { authorization: [`${relayerData.account}@active`] });
 
 }
 

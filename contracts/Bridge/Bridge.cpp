@@ -183,111 +183,11 @@ void Bridge::parse_header(struct header_info_struct* header_info, const bytes& h
     header_info->expected_root = root_entry.root.data();
 }
 
-void Bridge::store_header(struct header_info_struct* header_info,
-                          const vector<uint8_t>& header_rlp) {
-/*
-    state_type state_inst(_self, _self.value);
-    headers_type headers_inst(_self, _self.value);
-*/
-    uint64_t header_hash = crop(header_info->header_hash.hash);
-    uint64_t previous_hash = crop(header_info->previous_hash);
-    uint64_t block_num = header_info->block_num;
-
-    uint64_t msg_sender = 0; // TODO - actually get message sender and authenticate it
-
-    uint128_t difficulty_value = decode_number128(header_info->difficulty, header_info->difficulty_len);
-
-    storeheader(msg_sender,
-                block_num,
-                difficulty_value,
-                header_hash,
-                previous_hash,
-                header_rlp);
-
-/* old implementation:
-    // calculate total difficulty
-    uint128_t previous_total_difficulty;
-
-    if (block_num == state_inst.get().genesis_block_num) {
-        // genesis can only be input by the contract's owner
-        require_auth(_self);
-        previous_total_difficulty = 0;
-    } else {
-        auto prev_itr = headers_inst.find(previous_hash);
-        bool prev_exists = (prev_itr != headers_inst.end());
-        eosio_assert(prev_exists, "previous header hash does not exist");
-        previous_total_difficulty = prev_itr->total_difficulty;
-    }
-    uint128_t difficulty_value = decode_number128(header_info->difficulty, header_info->difficulty_len);
-    uint128_t total_difficulty = previous_total_difficulty + difficulty_value;
-
-    // update pointer to list head if needed
-    auto s = state_inst.get();
-    if( total_difficulty > s.headers_head_difficulty){
-        s.headers_head = header_hash;
-        s.headers_head_difficulty = total_difficulty;
-        s.headers_head_block_num = block_num;
-        state_inst.set(s, _self);
-    }
-
-      // store in table
-    auto itr = headers_inst.find(header_hash);
-    bool header_exists = (itr != headers_inst.end());
-    if (!header_exists) {
-        headers_inst.emplace(_self, [&](auto& s) {
-            s.header_hash = header_hash;
-            s.previous_hash = previous_hash;
-            s.total_difficulty = total_difficulty;
-            s.block_num = block_num;
-        });
-    } else {
-        headers_inst.modify(itr, _self, [&](auto& s) {
-            s.header_hash = header_hash;
-            s.previous_hash = previous_hash;
-            s.total_difficulty = total_difficulty;
-            s.block_num = block_num;
-        });
-    }
- */
-}
-
-/*
-ACTION Bridge::veriflongest(const bytes& header_hash) {
-    state_type state_inst(_self, _self.value);
-    headers_type headers_inst(_self, _self.value);
-
-    uint64_t header_hash_key = crop(header_hash.data());
-
-    // go backwards from list head and find given header
-    auto s = state_inst.get();
-    if (header_hash_key == s.headers_head) return; // action is in head - return successfully
-
-    // get previous hash
-    uint64_t current_hash = s.headers_head;
-    while (true) {
-        auto s = headers_inst.get(current_hash, "header is not on longest path");
-        if (s.previous_hash == header_hash_key) {
-            print("found in block before"); print(s.block_num);
-            return; // found - return successfully
-        }
-        current_hash = s.previous_hash;
-    }
-
-    eosio_assert(false, "not on longest path");
-
-}
-*/
-
 ACTION Bridge::storeroots(uint64_t genesis_block_num, // TODO - unused parameter, remove
                           const vector<uint64_t>& epoch_nums,
                           const bytes& dag_roots){
 
     require_auth(_self);
-/*
-    state_type state_inst(_self, _self.value);
-    state initial_state = {0, 0, 0, genesis_block_num};
-    state_inst.set(initial_state, _self);
-*/
 
     eosio_assert(epoch_nums.size() * MERKLE_ELEMENT_LEN == dag_roots.size(),
                  "epochs and roots vectors mismatch");
@@ -318,15 +218,24 @@ ACTION Bridge::storeroots(uint64_t genesis_block_num, // TODO - unused parameter
     }
 };
 
-ACTION Bridge::relay(const bytes& header_rlp,
+ACTION Bridge::relay(name msg_sender,
+                     const bytes& header_rlp,
                      const bytes& dags,
                      const bytes& proofs,
                      uint proof_length) {
 
+    // authenticate the sender
+    require_auth(msg_sender);
+
     struct header_info_struct header_info;
     parse_header(&header_info, header_rlp);
-    // TODO - reenable - verify_header(&header_info, dags, proofs, proof_length);
-    store_header(&header_info, header_rlp);
+    verify_header(&header_info, dags, proofs, proof_length);
+    store_header(msg_sender,
+                 header_info.block_num,
+                 decode_number128(header_info.difficulty, header_info.difficulty_len),
+                 crop(header_info.header_hash.hash),
+                 crop(header_info.previous_hash),
+                 header_rlp);
 
     return;
 }
@@ -369,7 +278,8 @@ extern "C" {
     void apply(uint64_t receiver, uint64_t code, uint64_t action) {
         if (code == receiver){
             switch( action ) {
-                EOSIO_DISPATCH_HELPER( Bridge, (relay)(checkreceipt)(storeroots)(setgenesis)(initscratch)(finalize)(veriflongest))
+                EOSIO_DISPATCH_HELPER( Bridge, (relay)(checkreceipt)(storeroots)(setgenesis)
+                                               (initscratch)(finalize)(veriflongest))
             }
         }
         eosio_exit(0);

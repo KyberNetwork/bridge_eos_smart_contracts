@@ -19,12 +19,12 @@ async function main (){
     bridgeAsBridge = await bridgeData.eos.contract("bridge");
     bridgeAsRelayer = await relayerData.eos.contract("bridge");
 
-    await bridgeAsBridge.initscratch({
-        msg_sender : 0, // TODO: fill for real
+    await bridgeAsRelayer.initscratch({
+        msg_sender : relayerData.account,
         anchor_block_num : process.argv[2],
         previous_anchor_pointer : process.argv[3], // TODO : make real
     },
-    { authorization: [`${bridgeData.account}@active`] });
+    { authorization: [`${relayerData.account}@active`] });
 }
 
 main()

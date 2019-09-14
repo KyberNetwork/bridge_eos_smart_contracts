@@ -55,6 +55,8 @@ else:
     else:
         final_st = "await bridgeAsRelayer.relay({ \n"
 
+final_st = final_st + "msg_sender: relayerData.account,\n"
+
 if USE_CLEOS:
     final_st = final_st + "\"header_rlp\":[\n"
 else:

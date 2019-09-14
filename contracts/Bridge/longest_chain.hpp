@@ -1,6 +1,3 @@
-//#include "../Common/common.hpp"
-//#include "../Common/rlp.hpp"
-
 #include "Bridge.hpp"
 
 #define ANCHOR_SMALL_INTERVAL 5
@@ -16,12 +13,12 @@ uint64_t sha256_of_list(const vector<uint64_t> &list) {
     return sha_and_crop((uint8_t *)(list.data()), sizeof(uint64_t) * list.size());
 }
 
-uint64_t get_tuple_key(uint64_t msg_sender, uint64_t anchor_block_num) {
+uint64_t get_tuple_key(name msg_sender, uint64_t anchor_block_num) {
     uint8_t input[16];
 
     // TODO - for some reason this doesn't work - memcpy(input, (uint8_t *)anchor_block_num, 8);
     for (uint i = 0; i < 8; i++) {
-        input[i] = (msg_sender >> (i * 8)) & 0xFF;
+        input[i] = (msg_sender.value >> (i * 8)) & 0xFF;
     }
     for (uint i = 0; i < 8; i++) {
         input[i + 8] = (anchor_block_num >> (i * 8)) & 0xFF;
@@ -47,7 +44,7 @@ uint64_t parseBuff(uint8_t buff[]) {
 }
 
 uint64_t Bridge::allocate_pointer(uint64_t header_hash) {
-    newstate_type state_inst(_self, _self.value);
+    state_type state_inst(_self, _self.value);
     auto s = state_inst.get();
     auto issued_pointer = ++s.last_issued_key;
     state_inst.set(s, _self);
@@ -61,17 +58,17 @@ uint64_t Bridge::allocate_pointer(uint64_t header_hash) {
 }
 
 
-void Bridge::setgenesis(uint64_t genesis_block_num,
-                        uint64_t header_hash,
-                        uint64_t difficulty) { // TODO: should difficulty be 0?
+ACTION Bridge::setgenesis(uint64_t genesis_block_num,
+                          uint64_t header_hash,
+                          uint64_t difficulty) { // TODO: should difficulty be 0?
     print("setgenesis with genesis block num ", genesis_block_num);
 
     require_auth(_self); // only authorized entity can set genesis
     eosio_assert(genesis_block_num % ANCHOR_BIG_INTERVAL == 1, "bad genesis block resolution");
 
-    newstate_type state_inst(_self, _self.value);
+    state_type state_inst(_self, _self.value);
     uint64_t current_pointer = 0; // can not allocate if state is not initialized
-    newstate initial_state = {
+    state initial_state = {
             current_pointer,   // last_issued_key
             difficulty,        // anchors_head_difficulty
             genesis_block_num, // anchors_head_block_num
@@ -95,10 +92,13 @@ void Bridge::setgenesis(uint64_t genesis_block_num,
     });
 }
 
-void Bridge::initscratch(uint64_t msg_sender,
-                         uint64_t anchor_block_num, // anchor to connect to + ANCHOR_SMALL_INTERVAL
-                         uint64_t previous_anchor_pointer) {
+ACTION Bridge::initscratch(name msg_sender,
+                           uint64_t anchor_block_num,
+                           uint64_t previous_anchor_pointer) {
     print("initscratch for anchor block num ", anchor_block_num);
+
+    // authenticate the sender
+    require_auth(msg_sender);
 
     // make sure anchor_block_num is in small interval resolution
     eosio_assert(anchor_block_num % ANCHOR_SMALL_INTERVAL == 0, "bad anchor resolution");
@@ -125,13 +125,13 @@ void Bridge::initscratch(uint64_t msg_sender,
     });
 }
 
-void Bridge::storeheader(uint64_t msg_sender,
-                         uint64_t block_num,
-                         uint128_t difficulty,
-                         uint64_t header_hash,
-                         uint64_t previous_hash,
-                         const vector<uint8_t>& header_rlp) {
-    print("storeheader for block num ", block_num);
+void Bridge::store_header(name msg_sender,
+                          uint64_t block_num,
+                          uint128_t difficulty,
+                          uint64_t header_hash,
+                          int64_t previous_hash,
+                          const vector<uint8_t>& header_rlp) {
+    print("store_header for block num ", block_num);
 
     // load scratchpad data for the tuple
     uint64_t next_anchor = round_up(block_num, ANCHOR_SMALL_INTERVAL);
@@ -141,7 +141,7 @@ void Bridge::storeheader(uint64_t msg_sender,
     eosio_assert(itr != scratch_inst.end(), "scratchpad not initialized");
 
     // check new block is based on previous one
-    newstate_type state_inst(_self, _self.value);
+    state_type state_inst(_self, _self.value);
     if (block_num != state_inst.get().genesis_block_num) {
         eosio_assert(previous_hash == itr->last_block_hash, "wrong previous hash");
     }
@@ -160,9 +160,11 @@ void Bridge::storeheader(uint64_t msg_sender,
     });
 }
 
-void Bridge::finalize(uint64_t msg_sender,
-                      uint64_t anchor_block_num) {
+ACTION Bridge::finalize(name msg_sender, uint64_t anchor_block_num) {
     print("finalize anchor block num ", anchor_block_num);
+
+    // authenticate the sender
+    require_auth(msg_sender);
 
     eosio_assert(anchor_block_num % ANCHOR_SMALL_INTERVAL == 0, "wrong anchor resolution");
 
@@ -219,7 +221,7 @@ void Bridge::finalize(uint64_t msg_sender,
     });
 
     // update pointer to list head if needed
-    newstate_type state_inst(_self, _self.value);
+    state_type state_inst(_self, _self.value);
     auto s = state_inst.get();
     if( scratch_itr->total_difficulty > s.anchors_head_difficulty){
         s.anchors_head_difficulty = scratch_itr->total_difficulty;
@@ -252,7 +254,7 @@ ACTION Bridge::veriflongest(vector<uint8_t>& header_rlp_sha256,
     eosio_assert(header_sha256 == proof[index], "header sha256 not found");
 
     // start process of finding adjacent node that is a multiplication of small interval
-    newstate_type state_inst(_self, _self.value);
+    state_type state_inst(_self, _self.value);
     auto state = state_inst.get();
     uint64_t running_pointer = state.anchors_head_pointer;
     uint64_t running_block_num = state.anchors_head_block_num;

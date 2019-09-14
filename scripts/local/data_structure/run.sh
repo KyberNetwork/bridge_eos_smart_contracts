@@ -1,9 +1,9 @@
 set - x
 bash scripts/local/data_structure/deploy.sh 8123001
-node scripts/local/data_structure/init.js
+node scripts/local/data_structure/init.js --create_relayer
 node scripts/local/data_structure/init_scratch.js 8123005 0
 node scripts/local/data_structure/relay_8123001.js
-node scripts/local/data_structure/relay_8123002.js --create_relayer
+node scripts/local/data_structure/relay_8123002.js
 node scripts/local/data_structure/relay_8123003.js
 node scripts/local/data_structure/relay_8123004.js
 node scripts/local/data_structure/relay_8123005.js
@@ -36,3 +36,4 @@ node scripts/local/data_structure/relay_8123023.js
 node scripts/local/data_structure/relay_8123024.js
 node scripts/local/data_structure/relay_8123025.js
 node scripts/local/data_structure/finalize.js 8123025
+node scripts/local/data_structure/verify_8123008.js
