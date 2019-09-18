@@ -183,8 +183,7 @@ void Bridge::parse_header(struct header_info_struct* header_info, const bytes& h
     header_info->expected_root = root_entry.root.data();
 }
 
-ACTION Bridge::storeroots(uint64_t genesis_block_num, // TODO - unused parameter, remove
-                          const vector<uint64_t>& epoch_nums,
+ACTION Bridge::storeroots(const vector<uint64_t>& epoch_nums,
                           const bytes& dag_roots){
 
     require_auth(_self);

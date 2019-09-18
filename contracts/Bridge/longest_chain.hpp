@@ -35,7 +35,7 @@ uint64_t round_down(uint64_t val, uint64_t denom) {
     return (val / denom) * denom;
 }
 
-uint64_t parseBuff(uint8_t buff[]) {
+uint64_t parseBuff(const uint8_t buff[]) {
     uint64_t result = 0;
     for(int i = 0; i < 8; i++){
         result |= (((uint64_t)buff[i]) << (56 - i * 8));
@@ -59,8 +59,8 @@ uint64_t Bridge::allocate_pointer(uint64_t header_hash) {
 
 
 ACTION Bridge::setgenesis(uint64_t genesis_block_num,
-                          uint64_t header_hash,
-                          uint64_t difficulty) { // TODO: should difficulty be 0?
+                          const bytes& previous_header_hash,
+                          uint64_t initial_difficulty) {
     print("setgenesis with genesis block num ", genesis_block_num);
 
     require_auth(_self); // only authorized entity can set genesis
@@ -69,11 +69,11 @@ ACTION Bridge::setgenesis(uint64_t genesis_block_num,
     state_type state_inst(_self, _self.value);
     uint64_t current_pointer = 0; // can not allocate if state is not initialized
     state initial_state = {
-            current_pointer,   // last_issued_key
-            difficulty,        // anchors_head_difficulty
-            genesis_block_num, // anchors_head_block_num
-            current_pointer,   // anchors_head_pointer
-            genesis_block_num  // genesis_block_num
+            current_pointer,    // last_issued_key
+            initial_difficulty, // anchors_head_difficulty
+            genesis_block_num,  // anchors_head_block_num
+            current_pointer,    // anchors_head_pointer
+            genesis_block_num   // genesis_block_num
     };
     state_inst.set(initial_state, _self);
 
@@ -85,9 +85,9 @@ ACTION Bridge::setgenesis(uint64_t genesis_block_num,
         s.current = current_pointer;
         s.previous_small = INVALID;
         s.previous_large = INVALID;
-        s.list_hash = 0;
-        s.header_hash = header_hash; // sha3(rlp{header}), for verifying previous hash
-        s.total_difficulty = difficulty;
+        s.list_hash = INVALID;
+        s.header_hash = crop(previous_header_hash.data());
+        s.total_difficulty = initial_difficulty;
         s.block_num = genesis_block_num - 1;
     });
 }
@@ -129,8 +129,8 @@ void Bridge::store_header(name msg_sender,
                           uint64_t block_num,
                           uint128_t difficulty,
                           uint64_t header_hash,
-                          int64_t previous_hash,
-                          const vector<uint8_t>& header_rlp) {
+                          uint64_t previous_hash,
+                          const bytes& header_rlp) {
     print("store_header for block num ", block_num);
 
     // load scratchpad data for the tuple
@@ -141,10 +141,7 @@ void Bridge::store_header(name msg_sender,
     eosio_assert(itr != scratch_inst.end(), "scratchpad not initialized");
 
     // check new block is based on previous one
-    state_type state_inst(_self, _self.value);
-    if (block_num != state_inst.get().genesis_block_num) {
-        eosio_assert(previous_hash == itr->last_block_hash, "wrong previous hash");
-    }
+    eosio_assert(previous_hash == itr->last_block_hash, "wrong previous hash");
 
     // add difficulty
     uint128_t new_total_difficulty = itr->total_difficulty + difficulty;
@@ -194,19 +191,6 @@ ACTION Bridge::finalize(name msg_sender, uint64_t anchor_block_num) {
         blocks_to_traverse -= ANCHOR_SMALL_INTERVAL;
     }
 
-    // TODO - remove tmp code:
-    /*
-    if (anchor_block_num == 8123010) {
-        for(int i = 0; i < scratch_itr->small_interval_list.size(); i++) {
-            print(i);
-            print(":");
-            print(scratch_itr->small_interval_list[i]);
-            print("\n");
-        }
-        print("list_hash: ", list_hash);
-    }
-    */
-
     // store new anchor
     uint current_anchor_pointer = allocate_pointer(scratch_itr->last_block_hash);
     print("current_anchor_pointer ", current_anchor_pointer);
@@ -235,7 +219,7 @@ ACTION Bridge::finalize(name msg_sender, uint64_t anchor_block_num) {
 }
 
 // NOTE: byte vectors are used instead of uint64_t since actually not all 2^64 range is supported.
-ACTION Bridge::veriflongest(vector<uint8_t>& header_rlp_sha256,
+ACTION Bridge::veriflongest(const bytes& header_rlp_sha256,
                             uint64_t block_num,
                             vector<uint8_t>& interval_list_proof) {
     print("veriflongest for block num ", block_num);
@@ -243,7 +227,7 @@ ACTION Bridge::veriflongest(vector<uint8_t>& header_rlp_sha256,
     // TODO: remove the need for parsing buffer on-chain by arranging input conveniently for the contract.
     auto header_sha256 = parseBuff(header_rlp_sha256.data());
 
-    // TODO: remove here as well, this is very cpu consuming
+    // TODO: remove parseBuff here as well, this is very cpu consuming
     vector<uint64_t> proof(ANCHOR_SMALL_INTERVAL);
     for(int k = 0; k < ANCHOR_SMALL_INTERVAL; k++) {
         proof[k] = parseBuff((uint8_t *)(&interval_list_proof[k * 8]));

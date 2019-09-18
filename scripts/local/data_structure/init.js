@@ -26,8 +26,8 @@ async function main (){
 
     await bridgeAsBridge.setgenesis({
         genesis_block_num : 8123001,
-        header_hash : 0, // TODO - change to real number, currently neglecting.
-        difficulty : 0
+        previous_header_hash : [0xc8, 0x7f, 0x24, 0xd3, 0x54, 0x12, 0x00, 0x86], // NOTE: head to revers bytes from hex(uint64_t)
+        initial_difficulty : 0
     },
     { authorization: [`${bridgeData.account}@active`] });
 

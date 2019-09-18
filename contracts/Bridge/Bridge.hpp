@@ -23,13 +23,12 @@ CONTRACT Bridge : public contract {
     public:
         using contract::contract;
 
-        ACTION storeroots(uint64_t genesis_block_num,
-                          const vector<uint64_t>& epoch_nums,
+        ACTION storeroots(const vector<uint64_t>& epoch_nums,
                           const vector<uint8_t>& dag_roots);
 
         ACTION setgenesis(uint64_t genesis_block_num,
-                          uint64_t header_hash,
-                          uint64_t difficulty);
+                          const vector<uint8_t>& previous_header_hash,
+                          uint64_t initial_difficulty);
 
         ACTION initscratch(name msg_sender,
                            uint64_t anchor_block_num,
@@ -44,7 +43,7 @@ CONTRACT Bridge : public contract {
         ACTION finalize(name msg_sender,
                         uint64_t anchor_block_num);
 
-        ACTION veriflongest(vector<uint8_t>& header_rlp_sha256,
+        ACTION veriflongest(const vector<uint8_t>& header_rlp_sha256,
                             uint64_t  block_num,
                             vector<uint8_t>& interval_list_proof);
 
@@ -114,7 +113,7 @@ CONTRACT Bridge : public contract {
                           uint64_t block_num,
                           uint128_t difficulty,
                           uint64_t header_hash,
-                          int64_t previous_hash,
+                          uint64_t previous_hash,
                           const vector<uint8_t>& header_rlp);
 
 };
