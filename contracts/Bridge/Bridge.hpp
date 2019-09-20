@@ -79,16 +79,17 @@ CONTRACT Bridge : public contract {
         // anchors are the headers that are maintained in permanent storage
         TABLE anchors {
             // related to data structure
-            uint64_t current;
+            uint64_t current; // main key
             uint64_t previous_small;
             uint64_t previous_large;
             uint64_t list_hash; // sha256([sha256(rlp{z - 1}), sha256(rlp{z - 2}), …, sha256(rlp{z - 50})])
 
             // related to verifying ethash
-            uint64_t  header_hash; // sha3(rlp{header}), for verifying previous hash
+            uint64_t  header_hash; // secondary key - sha3(rlp{header}), for verifying previous hash
             uint128_t total_difficulty;
             uint64_t  block_num;
             uint64_t primary_key() const { return current; }
+            uint64_t by_header_hash() const {return header_hash; }
         };
 
         TABLE scratchdata {
@@ -105,7 +106,10 @@ CONTRACT Bridge : public contract {
         typedef eosio::singleton<"state"_n, state> state_type;
         typedef eosio::multi_index<"roots"_n, roots> roots_type;
         typedef eosio::multi_index<"receipts"_n, receipts> receipts_type;
-        typedef eosio::multi_index<"anchors"_n, anchors> anchors_type;
+        typedef eosio::multi_index<"anchors"_n,
+                                   anchors,
+                                   indexed_by<"headerhash"_n, const_mem_fun<anchors, uint64_t, &anchors::by_header_hash>>>
+                                   anchors_type;
         typedef eosio::multi_index<"scratchdata"_n, scratchdata> scratchdata_type;
 
     private:

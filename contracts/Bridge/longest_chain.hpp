@@ -49,11 +49,6 @@ uint64_t Bridge::allocate_pointer(uint64_t header_hash) {
     auto issued_pointer = ++s.last_issued_key;
     state_inst.set(s, _self);
 
-    /* TODO - since on finalize() the user needs to input the anchor's pointer, need to:
-        * Hold an on chain mapping of 8B of hash to list of indexes
-        * Off chain client can traverse/check what is the right index.
-    */
-
     return issued_pointer;
 }
 
