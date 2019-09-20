@@ -122,6 +122,7 @@ ACTION Bridge::initscratch(name msg_sender,
         s.last_block_hash = itr->header_hash;
         s.total_difficulty = itr->total_difficulty;
         s.previous_anchor_pointer = previous_anchor_pointer;
+        s.last_relayed_block = previous_anchor_block_num;
     });
 }
 
@@ -154,6 +155,7 @@ void Bridge::store_header(name msg_sender,
         s.last_block_hash = header_hash;
         s.small_interval_list.push_back(rlp_sha);
         s.total_difficulty = new_total_difficulty;
+        s.last_relayed_block = block_num;
     });
 }
 

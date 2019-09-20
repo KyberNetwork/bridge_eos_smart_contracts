@@ -98,6 +98,7 @@ CONTRACT Bridge : public contract {
             uint128_t        total_difficulty;
             vector<uint64_t> small_interval_list;
             uint64_t         previous_anchor_pointer;
+            uint64_t         last_relayed_block; // for off chain error checking relayed
             uint64_t primary_key() const { return anchor_sender_hash; }
         };
 

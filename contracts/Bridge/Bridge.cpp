@@ -18,7 +18,7 @@
 #define MIX_NODES (MIX_WORDS / NODE_WORDS)
 
 #define FNV_PRIME 0x01000193
-#define SKIP_VERIFICATION true
+#define SKIP_VERIFICATION false
 
 using namespace eosio;
 
