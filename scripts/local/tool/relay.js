@@ -25,6 +25,8 @@ END_BLOCK = parseInt(process.argv[4])
 PRE_GENESIS_HEADER_HASH = hexToBytes(process.argv[5]) // 8 msbs from etherscan parent hash
 INIT = (START_BLOCK == GENESIS_BLOCK)
 
+const snooze = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 function round_up(val, denom) {
     console.log("(val + denom - 1)", (val + denom - 1))
     console.log("(val + denom - 1) / denom)", (val + denom - 1) / denom)
@@ -37,8 +39,6 @@ function hexToBytes(hex) {
     bytes.push(parseInt(hex.substr(c, 2), 16));
     return bytes;
 }
-
-const snooze = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function returnTuple(block, relayerAccount) {
     const buf = Buffer.allocUnsafe(16);
@@ -53,7 +53,6 @@ function returnTuple(block, relayerAccount) {
 }
 
 async function isBlockInScratchpad(block, eos, bridgeAccount) {
-
     let scratchpadReply = await eos.getTableRows({
         code: bridgeAccount,
         scope:bridgeAccount,

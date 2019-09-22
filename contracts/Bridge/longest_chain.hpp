@@ -173,6 +173,12 @@ ACTION Bridge::finalize(name msg_sender, uint64_t anchor_block_num) {
     auto scratch_itr = scratch_inst.find(tuple_key);
     eosio_assert(scratch_itr != scratch_inst.end(), "scratchpad not initialized");
 
+    // make sure there is no existing anchor with same header hash
+    anchors_type anchors_inst(_self, _self.value);
+    auto same_hash_entries = anchors_inst.get_index<"headerhash"_n>();
+    eosio_assert(same_hash_entries.find(scratch_itr->last_block_hash) == same_hash_entries.end(),
+                 "found same header hash on an anchor");
+
     // calculate small_interval list hash
     eosio_assert(scratch_itr->small_interval_list.size() == ANCHOR_SMALL_INTERVAL, "wrong list size");
     uint64_t list_hash = sha256_of_list(scratch_itr->small_interval_list);
@@ -182,7 +188,6 @@ ACTION Bridge::finalize(name msg_sender, uint64_t anchor_block_num) {
     if (blocks_to_traverse == 0) blocks_to_traverse = ANCHOR_BIG_INTERVAL;
 
     // first traverse back to the last anchor
-    anchors_type anchors_inst(_self, _self.value);
     auto traverse_itr = anchors_inst.find(scratch_itr->previous_anchor_pointer);
     blocks_to_traverse -= ANCHOR_SMALL_INTERVAL;
 
@@ -217,6 +222,23 @@ ACTION Bridge::finalize(name msg_sender, uint64_t anchor_block_num) {
     }
 
     // clean up scratchpad
+    scratch_inst.erase(scratch_itr);
+}
+
+ACTION Bridge::erasescratch(name msg_sender, uint64_t anchor_block_num) {
+    print("finalize anchor block num ", anchor_block_num);
+
+    // authenticate the sender
+    require_auth(msg_sender);
+
+    eosio_assert(anchor_block_num % ANCHOR_SMALL_INTERVAL == 0, "wrong anchor resolution");
+
+    // load scratchpad
+    scratchdata_type scratch_inst(_self, _self.value);
+    uint64_t tuple_key = get_tuple_key(msg_sender, anchor_block_num);
+    auto scratch_itr = scratch_inst.find(tuple_key);
+    eosio_assert(scratch_itr != scratch_inst.end(), "scratchpad not initialized");
+
     scratch_inst.erase(scratch_itr);
 }
 

@@ -34,6 +34,8 @@ CONTRACT Bridge : public contract {
                            uint64_t anchor_block_num,
                            uint64_t previous_anchor_pointer);
 
+        ACTION erasescratch(name msg_sender, uint64_t anchor_block_num);
+
         ACTION relay(name msg_sender,
                      const vector<uint8_t>& header_rlp,
                      const vector<uint8_t>& dags,

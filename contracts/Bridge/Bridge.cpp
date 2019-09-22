@@ -281,7 +281,7 @@ extern "C" {
         if (code == receiver){
             switch( action ) {
                 EOSIO_DISPATCH_HELPER( Bridge, (relay)(checkreceipt)(storeroots)(setgenesis)
-                                               (initscratch)(finalize)(veriflongest))
+                                               (initscratch)(erasescratch)(finalize)(veriflongest))
             }
         }
         eosio_exit(0);
