@@ -4,6 +4,7 @@ const path = require('path');
 const assert = require('assert');
 const exec = require('await-exec')
 const Web3 = require("web3");
+const ecc = require('eosjs-ecc');
 
 /* Assign keypairs. to accounts. Use unique name prefixes to prevent collisions between test modules. */
 const keyPairArray = JSON.parse(fs.readFileSync("scripts/local/keys.json"))
@@ -24,6 +25,12 @@ END_BLOCK = parseInt(process.argv[4])
 PRE_GENESIS_HEADER_HASH = hexToBytes(process.argv[5]) // 8 msbs from etherscan parent hash
 INIT = (START_BLOCK == GENESIS_BLOCK)
 
+function round_up(val, denom) {
+    console.log("(val + denom - 1)", (val + denom - 1))
+    console.log("(val + denom - 1) / denom)", (val + denom - 1) / denom)
+    return (parseInt((val + denom - 1) / denom) * parseInt(denom));
+}
+
 function hexToBytes(hex) {
     hex = hex.replace("0x","")
     for (var bytes = [], c = 0; c < hex.length; c += 2)
@@ -33,12 +40,27 @@ function hexToBytes(hex) {
 
 const snooze = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+function returnTuple(block, relayerAccount) {
+    const buf = Buffer.allocUnsafe(16);
+    relayerAsInt = bridgeData.eos.modules.format.encodeName(relayerAccount)
+    buf.writeIntBE(relayerAsInt, 0, 8)
+    buf.writeIntLE(block, 8, 8)
+
+    shaRes = ecc.sha256(buf)
+    forEndianConversion = shaRes.substr(0, 16)
+    tuple = parseInt('0x'+forEndianConversion.match(/../g).reverse().join(''));
+    return tuple
+}
+
 async function isBlockInScratchpad(block, eos, bridgeAccount) {
+
     let scratchpadReply = await eos.getTableRows({
         code: bridgeAccount,
         scope:bridgeAccount,
         table:"scratchdata",
-        json: true
+        json: true,
+        lower_bound: (tuple - 10000),
+        upper_bound: (tuple + 10000),
     })
 
     for (var t = 0; t < scratchpadReply.rows.length; t++) {
@@ -69,13 +91,13 @@ async function setGenesis() {
 
 async function initScratchpad(currentBlock) {
     console.log("initscratch")
-    initSucceed = await isBlockInScratchpad(currentBlock - 1, bridgeData.eos, bridgeData.account)
+    initSucceed = await isBlockInScratchpad(currentBlock - 1, bridgeData.eos, bridgeData.account /* TODO - should it be passed or constant? */)
     if (initSucceed) console.log("scratchpad already initialized")
 
     // get previous anchor pointer
     hash = await getCroppedHeaderHash(currentBlock - 1)
 
-    /* TODO: returned hash loses some percision on parseInt so we use a range and assume no collisions.
+    /* TODO: returned hash loses some precision on parseInt so we use a range and assume no collisions.
      * Need to further investigate
      */
     let anchorsReply = await bridgeData.eos.getTableRows({
@@ -146,7 +168,6 @@ async function finalizeScratchpad(currentBlock) {
 }
 
 async function main (){
-
     /* create relayer account */
     if(INIT) await systemData.eos.transaction(tr => {tr.newaccount({creator: "eosio", name:relayerData.account, owner: relayerData.publicKey, active: relayerData.publicKey})});
 
@@ -156,13 +177,17 @@ async function main (){
     if (INIT) await setGenesis()
 
     currentBlock = START_BLOCK;
+    tuple = 0;
     while(currentBlock <= END_BLOCK) {
         console.log("block", currentBlock)
 
         /* if first block in scratchpad, then first init scratchpad */
-        if (currentBlock % ANCHOR_SMALL_INTERVAL == 1) await initScratchpad(currentBlock)
+        if (currentBlock % ANCHOR_SMALL_INTERVAL == 1) {
+            tuple = returnTuple(currentBlock + ANCHOR_SMALL_INTERVAL - 1, relayerData.account)
+            await initScratchpad(currentBlock)
+        }
 
-        await relayBlock(currentBlock)
+        await relayBlock(currentBlock, )
 
         /* if last block in scratchpad, then finalize scratchpad */
         if (currentBlock % ANCHOR_SMALL_INTERVAL == 0) await finalizeScratchpad(currentBlock)

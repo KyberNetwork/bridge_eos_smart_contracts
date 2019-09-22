@@ -6,7 +6,12 @@
 
 uint64_t sha_and_crop(const uint8_t *input, uint size) {
     capi_checksum256 sha_csum = sha256(input, size);
-    return crop(sha_csum.hash);
+
+    uint64_t res = 0;
+    for(int i = 0; i < 8; i++){
+        res |= ((uint64_t)(sha_csum.hash[i]) << (i * 8));
+    }
+    return res;
 }
 
 uint64_t sha256_of_list(const vector<uint64_t> &list) {
