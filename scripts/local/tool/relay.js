@@ -24,6 +24,8 @@ START_BLOCK = parseInt(process.argv[3])
 END_BLOCK = parseInt(process.argv[4])
 PRE_GENESIS_HEADER_HASH = hexToBytes(process.argv[5]) // 8 msbs from etherscan parent hash
 INIT = (START_BLOCK == GENESIS_BLOCK)
+DIR_FOR_RELAY_FILES = "tmp"
+DELETE_RELAY_FILES = false
 
 const snooze = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -38,6 +40,43 @@ function hexToBytes(hex) {
     for (var bytes = [], c = 0; c < hex.length; c += 2)
     bytes.push(parseInt(hex.substr(c, 2), 16));
     return bytes;
+}
+
+String.prototype.leftJustify = function( length, char ) {
+    var fill = [];
+    while ( fill.length + this.length < length ) {
+      fill[fill.length] = char;
+    }
+    return fill.join('') + this;
+}
+
+function parseRelayDaya(jsonFile){
+    rawdata = fs.readFileSync(jsonFile);
+    data = JSON.parse(rawdata);
+
+    header_rlp = data["header_rlp"].replace("0x", "");
+    header_rlp_buf = Buffer.from(header_rlp, 'hex')
+    proof_length = data["proof_length"]
+
+    dag_chunks = []
+    data['elements'].forEach(function(element) {
+        stripped = element.replace("0x", "");
+        padded = stripped.leftJustify(32 * 2, '0')
+        reversed = Uint8Array.from(Buffer.from(padded, 'hex')).reverse();
+        dag_chunks.push(reversed)
+    });
+    dags = Buffer.concat(dag_chunks);
+
+    proof_chunks = []
+    data["merkle_proofs"].forEach(function(element) {
+        stripped = element.replace("0x", "");
+        padded = stripped.leftJustify(16 * 2, '0')
+        proof_chunks.push(Buffer.from(padded, 'hex'))
+    });
+    proofs = Buffer.concat(proof_chunks);
+    
+    parsedData = {header_rlp: header_rlp_buf, proof_length: proof_length, dags: dags, proofs: proofs}
+    return parsedData;
 }
 
 function returnTuple(block, relayerAccount) {
@@ -134,7 +173,25 @@ async function relayBlock(currentBlock) {
     if (relaySucceed) console.log("block already relayed")
 
     while(!relaySucceed) {
-        await exec(`bash scripts/local/tool/create_relay.sh ${currentBlock}`)
+        JSON_PATH = DIR_FOR_RELAY_FILES + "/" + "ethashproof_output_" + currentBlock + ".json"
+        if (!fs.existsSync(JSON_PATH)) {
+            await exec(`ethashproof/cmd/relayer/relayer ${currentBlock} | sed -e '1,/Json output/d' > ${JSON_PATH}`)
+        }
+        parsedData = parseRelayDaya(JSON_PATH);
+        if (DELETE_RELAY_FILES) fs.unlinkSync(JSON_PATH)
+
+        try {
+            await bridgeAsRelayer.relay({ 
+                msg_sender: relayerData.account,
+                header_rlp: parsedData.header_rlp,
+                dags: parsedData.dags,
+                proofs: parsedData.proofs,
+                proof_length: parsedData.proof_length},
+                { authorization: [`${relayerData.account}@active`] }
+            )
+        } catch(e){
+            console.log(e)
+        }
 
         /* verify relayed succeeded */
         relaySucceed = await isBlockInScratchpad(currentBlock, bridgeData.eos, bridgeData.account)
