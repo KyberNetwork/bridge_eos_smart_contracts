@@ -6,27 +6,6 @@ const exec = require('await-exec')
 const Web3 = require("web3");
 const ecc = require('eosjs-ecc');
 
-/* Assign keypairs. to accounts. Use unique name prefixes to prevent collisions between test modules. */
-const keyPairArray = JSON.parse(fs.readFileSync("scripts/local/keys.json"))
-const relayerData =    {account: "relayer",   publicKey: keyPairArray[0][0], privateKey: keyPairArray[0][1]}
-const systemData =  {account: "eosio", publicKey: "EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV", privateKey: "5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3"}
-const bridgeData = {account: "bridge", publicKey: "5JeKxP8eTUB9pU2jMKHBJB6cQc16VpMntZoeYz5Fv65wRyPNkZN", privateKey: "5JeKxP8eTUB9pU2jMKHBJB6cQc16VpMntZoeYz5Fv65wRyPNkZN"}
-
-bridgeData.eos = Eos({ keyProvider: bridgeData.privateKey /*, verbose: 'false' */})
-relayerData.eos = Eos({ keyProvider: relayerData.privateKey /* , verbose: 'false' */})
-systemData.eos = Eos({ keyProvider: systemData.privateKey /* , verbose: 'false' */})
-
-ETHEREUM_URL = "https://mainnet.infura.io"
-ANCHOR_SMALL_INTERVAL = 5
-ANCHOR_BIG_INTERVAL = 10
-GENESIS_BLOCK = parseInt(process.argv[2])
-START_BLOCK = parseInt(process.argv[3])
-END_BLOCK = parseInt(process.argv[4])
-PRE_GENESIS_HEADER_HASH = hexToBytes(process.argv[5]) // 8 msbs from etherscan parent hash
-INIT = (START_BLOCK == GENESIS_BLOCK)
-DIR_FOR_RELAY_FILES = "tmp"
-DELETE_RELAY_FILES = false
-
 const snooze = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function round_up(val, denom) {
@@ -79,9 +58,9 @@ function parseRelayDaya(jsonFile){
     return parsedData;
 }
 
-function returnTuple(block, relayerAccount) {
+function returnTuple(block, relayerAccount, eos) {
     const buf = Buffer.allocUnsafe(16);
-    relayerAsInt = bridgeData.eos.modules.format.encodeName(relayerAccount)
+    relayerAsInt = eos.modules.format.encodeName(relayerAccount)
     buf.writeIntBE(relayerAsInt, 0, 8)
     buf.writeIntLE(block, 8, 8)
 
@@ -118,18 +97,19 @@ async function getCroppedHeaderHash(blockNum) {
     return r
 }
 
-async function setGenesis() {
+async function setGenesis(bridgeAccount) {
+    bridgeAsBridge = await bridgeEos.contract(bridgeAccount);
     await bridgeAsBridge.setgenesis({
-        genesis_block_num : START_BLOCK,
+        genesis_block_num : GENESIS_BLOCK,
         previous_header_hash : PRE_GENESIS_HEADER_HASH, 
         initial_difficulty : 0
     },
-    { authorization: [`${bridgeData.account}@active`] });
+    { authorization: [`${bridgeAccount}@active`] });
 }
 
-async function initScratchpad(currentBlock) {
+async function initScratchpad(currentBlock, eos, bridgeAccount, relayerAccount) {
     console.log("initscratch")
-    initSucceed = await isBlockInScratchpad(currentBlock - 1, bridgeData.eos, bridgeData.account /* TODO - should it be passed or constant? */)
+    initSucceed = await isBlockInScratchpad(currentBlock - 1, eos, bridgeAccount)
     if (initSucceed) console.log("scratchpad already initialized")
 
     // get previous anchor pointer
@@ -138,9 +118,9 @@ async function initScratchpad(currentBlock) {
     /* TODO: returned hash loses some precision on parseInt so we use a range and assume no collisions.
      * Need to further investigate
      */
-    let anchorsReply = await bridgeData.eos.getTableRows({
-        code: bridgeData.account,
-        scope:bridgeData.account,
+    let anchorsReply = await eos.getTableRows({
+        code: bridgeAccount,
+        scope:bridgeAccount,
         table:"anchors",
         json: true,
         key_type: 'i64',
@@ -152,14 +132,14 @@ async function initScratchpad(currentBlock) {
 
     while(!initSucceed) {
         await bridgeAsRelayer.initscratch({
-            msg_sender : relayerData.account,
+            msg_sender : relayerAccount,
             anchor_block_num : currentBlock + ANCHOR_SMALL_INTERVAL - 1,
             previous_anchor_pointer : previous_anchor_pointer,
             },
-            { authorization: [`${relayerData.account}@active`] }
+            { authorization: [`${relayerAccount}@active`] }
         )
 
-        initSucceed = await isBlockInScratchpad(currentBlock - 1, bridgeData.eos, bridgeData.account)
+        initSucceed = await isBlockInScratchpad(currentBlock - 1, eos, bridgeAccount)
         if (!initSucceed) {
             console.log("scratchpad not initialized, snooze and retry")
             await snooze(1000)
@@ -167,9 +147,9 @@ async function initScratchpad(currentBlock) {
     }
 }
 
-async function relayBlock(currentBlock) {
+async function relayBlock(currentBlock, eos, bridgeAccount, relayerAccount) {
     console.log("relay block")
-    relaySucceed = await isBlockInScratchpad(currentBlock, bridgeData.eos, bridgeData.account)
+    relaySucceed = await isBlockInScratchpad(currentBlock, eos, bridgeAccount)
     if (relaySucceed) console.log("block already relayed")
 
     while(!relaySucceed) {
@@ -182,19 +162,19 @@ async function relayBlock(currentBlock) {
 
         try {
             await bridgeAsRelayer.relay({ 
-                msg_sender: relayerData.account,
+                msg_sender: relayerAccount,
                 header_rlp: parsedData.header_rlp,
                 dags: parsedData.dags,
                 proofs: parsedData.proofs,
                 proof_length: parsedData.proof_length},
-                { authorization: [`${relayerData.account}@active`] }
+                { authorization: [`${relayerAccount}@active`] }
             )
         } catch(e){
             console.log(e)
         }
 
         /* verify relayed succeeded */
-        relaySucceed = await isBlockInScratchpad(currentBlock, bridgeData.eos, bridgeData.account)
+        relaySucceed = await isBlockInScratchpad(currentBlock, eos, bridgeAccount)
         if (!relaySucceed) {
             console.log("relay failed, snooze and retry")
             await snooze(1000)
@@ -202,20 +182,20 @@ async function relayBlock(currentBlock) {
     }
 }
 
-async function finalizeScratchpad(currentBlock) {
+async function finalizeScratchpad(currentBlock, eos, bridgeAccount, relayerAccount) {
     console.log("finalize")
-    finalizeSucceed = !(await isBlockInScratchpad(currentBlock, bridgeData.eos, bridgeData.account))
+    finalizeSucceed = !(await isBlockInScratchpad(currentBlock, eos, bridgeAccount))
     if (finalizeSucceed) console.log("finalized already done")
 
     while(!finalizeSucceed) {
         await bridgeAsRelayer.finalize({
-            msg_sender : relayerData.account,
+            msg_sender : relayerAccount,
             anchor_block_num : currentBlock,
         },
-        { authorization: [`${relayerData.account}@active`] });
+        { authorization: [`${relayerAccount}@active`] });
 
         /* verify finalize succeeded */
-        finalizeSucceed = !(await isBlockInScratchpad(currentBlock, bridgeData.eos, bridgeData.account))
+        finalizeSucceed = !(await isBlockInScratchpad(currentBlock, eos, bridgeAccount))
         if (!finalizeSucceed) {
             console.log("finalize failed, snooze and retry")
             await snooze(1000)
@@ -223,14 +203,11 @@ async function finalizeScratchpad(currentBlock) {
     }
 }
 
-async function main (){
-    /* create relayer account */
-    if(INIT) await systemData.eos.transaction(tr => {tr.newaccount({creator: "eosio", name:relayerData.account, owner: relayerData.publicKey, active: relayerData.publicKey})});
+async function mainLoop(bridgeEos, relayerEos, bridgeAccount, relayerAccount){
 
-    bridgeAsBridge = await bridgeData.eos.contract("bridge");
-    bridgeAsRelayer = await relayerData.eos.contract("bridge");
-
-    if (INIT) await setGenesis()
+    // TODO: pass these as well as tuple to inner function??
+    bridgeAsRelayer = await relayerEos.contract(bridgeAccount);
+    eos = relayerEos // can be any eos object
 
     currentBlock = START_BLOCK;
     tuple = 0;
@@ -239,16 +216,68 @@ async function main (){
 
         /* if first block in scratchpad, then first init scratchpad */
         if (currentBlock % ANCHOR_SMALL_INTERVAL == 1) {
-            tuple = returnTuple(currentBlock + ANCHOR_SMALL_INTERVAL - 1, relayerData.account)
-            await initScratchpad(currentBlock)
+            tuple = returnTuple(currentBlock + ANCHOR_SMALL_INTERVAL - 1, relayerAccount, relayerEos)
+            await initScratchpad(currentBlock, eos, bridgeAccount, relayerAccount)
         }
 
-        await relayBlock(currentBlock, )
+        await relayBlock(currentBlock, eos, bridgeAccount, relayerAccount)
 
         /* if last block in scratchpad, then finalize scratchpad */
-        if (currentBlock % ANCHOR_SMALL_INTERVAL == 0) await finalizeScratchpad(currentBlock)
+        if (currentBlock % ANCHOR_SMALL_INTERVAL == 0) {
+            await finalizeScratchpad(currentBlock, eos, bridgeAccount, relayerAccount)
+        }
         currentBlock++
     }
 }
 
+
+async function main(){
+    
+    ///////// these should be given from outside as part of a test
+    const keyPairArray = JSON.parse(fs.readFileSync("scripts/local/keys.json"))
+    const relayerData =    {account: "relayer",   publicKey: keyPairArray[0][0], privateKey: keyPairArray[0][1]}
+    const systemData =  {account: "eosio", publicKey: "EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV", privateKey: "5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3"}
+    const bridgeData = {account: "bridge", publicKey: "5JeKxP8eTUB9pU2jMKHBJB6cQc16VpMntZoeYz5Fv65wRyPNkZN", privateKey: "5JeKxP8eTUB9pU2jMKHBJB6cQc16VpMntZoeYz5Fv65wRyPNkZN"}
+
+    bridgeEos = Eos({ keyProvider: bridgeData.privateKey /*, verbose: 'false' */})
+    relayerEos = Eos({ keyProvider: relayerData.privateKey /* , verbose: 'false' */})
+
+    bridgeAccount = bridgeData.account
+    relayerAccount = relayerData.account
+
+    // only for init
+    relayerPublicKey = relayerData.publicKey
+    systemEos = Eos({ keyProvider: systemData.privateKey /* , verbose: 'false' */})
+
+    // TODO - insert these to configuration as well so can write tests
+    // maintain option to pass private keys as well and not eos objects!!!
+    ETHEREUM_URL = "https://mainnet.infura.io"
+    ANCHOR_SMALL_INTERVAL = 5
+    ANCHOR_BIG_INTERVAL = 10
+    START_BLOCK = parseInt(process.argv[3])
+    END_BLOCK = parseInt(process.argv[4])
+    DIR_FOR_RELAY_FILES = "tmp"
+    DELETE_RELAY_FILES = false
+
+    ////// these are part of the tool but not part of the basic package ///// 
+    GENESIS_BLOCK = parseInt(process.argv[2])
+    INIT = (START_BLOCK == GENESIS_BLOCK)
+    PRE_GENESIS_HEADER_HASH = hexToBytes(process.argv[5]) // 8 msbs from etherscan parent hash
+
+    /* create relayer account */
+    if(INIT) await systemEos.transaction(tr => {tr.newaccount({
+        creator: "eosio",
+        name:relayerAccount, 
+        owner: relayerPublicKey,
+        active: relayerPublicKey})
+    });
+    
+    if (INIT) await setGenesis(bridgeAccount)
+    ///////////////////////////////////////////////////////////////////
+
+    await mainLoop(bridgeEos, // relevant only if start == genesis, but not really - should handle!!!
+                   relayerEos,
+                   bridgeAccount,
+                   relayerAccount);
+}
 main()
