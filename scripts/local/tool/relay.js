@@ -9,8 +9,6 @@ const ecc = require('eosjs-ecc');
 const snooze = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function round_up(val, denom) {
-    console.log("(val + denom - 1)", (val + denom - 1))
-    console.log("(val + denom - 1) / denom)", (val + denom - 1) / denom)
     return (parseInt((val + denom - 1) / denom) * parseInt(denom));
 }
 
@@ -200,13 +198,12 @@ module.exports.mainLoop = async function(cfg, startBlock, endBlock)
     bridgeContract = await cfg.relayerEos.contract(cfg.bridgeAccount);
 
     currentBlock = startBlock;
-    currentTuple = 0;
     while(currentBlock <= endBlock) {
         console.log("block", currentBlock)
+        currentTuple = returnTuple(cfg, round_up(currentBlock, cfg.anchorSmallInterval))
 
         /* if first block in scratchpad, then first init scratchpad */
         if (currentBlock % cfg.anchorSmallInterval == 1) {
-            currentTuple = returnTuple(cfg, currentBlock + cfg.anchorSmallInterval - 1)
             await initScratchpad(cfg, bridgeContract, currentTuple, currentBlock)
         }
 

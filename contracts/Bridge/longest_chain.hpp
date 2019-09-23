@@ -1,7 +1,7 @@
 #include "Bridge.hpp"
 
-#define ANCHOR_SMALL_INTERVAL 5
-#define ANCHOR_BIG_INTERVAL   10
+#define ANCHOR_SMALL_INTERVAL 10
+#define ANCHOR_BIG_INTERVAL   100
 #define INVALID (1LL << 62) - 1
 
 uint64_t sha_and_crop(const uint8_t *input, uint size) {
