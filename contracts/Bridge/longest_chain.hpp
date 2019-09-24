@@ -1,7 +1,7 @@
 #include "Bridge.hpp"
 
-#define ANCHOR_SMALL_INTERVAL 10
-#define ANCHOR_BIG_INTERVAL   100
+#define ANCHOR_SMALL_INTERVAL 50
+#define ANCHOR_BIG_INTERVAL   1000
 #define INVALID (1LL << 62) - 1
 
 uint64_t sha_and_crop(const uint8_t *input, uint size) {
@@ -172,6 +172,9 @@ ACTION Bridge::finalize(name msg_sender, uint64_t anchor_block_num) {
     uint64_t tuple_key = get_tuple_key(msg_sender, anchor_block_num);
     auto scratch_itr = scratch_inst.find(tuple_key);
     eosio_assert(scratch_itr != scratch_inst.end(), "scratchpad not initialized");
+
+
+
 
     // make sure there is no existing anchor with same header hash
     anchors_type anchors_inst(_self, _self.value);
