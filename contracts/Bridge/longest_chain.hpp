@@ -173,9 +173,6 @@ ACTION Bridge::finalize(name msg_sender, uint64_t anchor_block_num) {
     auto scratch_itr = scratch_inst.find(tuple_key);
     eosio_assert(scratch_itr != scratch_inst.end(), "scratchpad not initialized");
 
-
-
-
     // make sure there is no existing anchor with same header hash
     anchors_type anchors_inst(_self, _self.value);
     auto same_hash_entries = anchors_inst.get_index<"headerhash"_n>();
@@ -185,6 +182,20 @@ ACTION Bridge::finalize(name msg_sender, uint64_t anchor_block_num) {
     // calculate small_interval list hash
     eosio_assert(scratch_itr->small_interval_list.size() == ANCHOR_SMALL_INTERVAL, "wrong list size");
     uint64_t list_hash = sha256_of_list(scratch_itr->small_interval_list);
+
+    // TODO - remove tmp code:
+    if (anchor_block_num == 8585050) {
+        print("\n");
+        print("small_interval_list:");
+        print("\n");
+        for(int i = 0; i < scratch_itr->small_interval_list.size(); i++) {
+            print(scratch_itr->small_interval_list[i]);
+            print(",");
+            print("\n");
+        }
+        print("\n");
+        print("list_hash: ", list_hash);
+    }
 
     // traverse back on anchor list and set previous_large
     uint blocks_to_traverse = anchor_block_num % ANCHOR_BIG_INTERVAL;
@@ -203,7 +214,6 @@ ACTION Bridge::finalize(name msg_sender, uint64_t anchor_block_num) {
 
     // store new anchor
     uint current_anchor_pointer = allocate_pointer(scratch_itr->last_block_hash);
-    print("current_anchor_pointer ", current_anchor_pointer);
     anchors_inst.emplace(_self, [&](auto& s) {
         s.current = current_anchor_pointer;
         s.previous_small = scratch_itr->previous_anchor_pointer;
