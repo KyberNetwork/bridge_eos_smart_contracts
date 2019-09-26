@@ -132,7 +132,7 @@ static uint remove_last_field_from_rlp(uint8_t* rlp, uint field_len) {
 
     rlp_final_len = rlp_org_len - (field_len + field_len_field_len);
 
-    // make sure number of bytes wasn't chage
+    // make sure number of bytes wasn't changed
     if(rlp_final_len <= 256) eosio_assert(0,"error: unexpcted rlp len\n");
     if(rlp_org_len >= 256 * 256) eosio_assert(0,"error: unexpecpted rlp len\n");
 

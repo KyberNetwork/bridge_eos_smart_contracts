@@ -37,7 +37,7 @@ CONTRACT Bridge : public contract {
         ACTION erasescratch(name msg_sender, uint64_t anchor_block_num);
 
         ACTION relay(name msg_sender,
-                     const vector<uint8_t>& header_rlp,
+                     vector<uint8_t>& header_rlp,
                      const vector<uint8_t>& dags,
                      const vector<uint8_t>& proofs,
                      uint proof_length);
@@ -49,7 +49,8 @@ CONTRACT Bridge : public contract {
                             uint64_t  block_num,
                             vector<uint8_t>& interval_list_proof);
 
-        ACTION checkreceipt(const vector<uint8_t>& header_rlp,
+	// TODO: return header_rlp to const after elegantly removing its mutation later
+        ACTION checkreceipt(vector<uint8_t>& header_rlp,
                             const vector<uint8_t>& encoded_path,
                             const vector<uint8_t>& receipt_rlp,
                             const vector<uint8_t>& all_parent_nodes_rlps,
@@ -115,7 +116,7 @@ CONTRACT Bridge : public contract {
         typedef eosio::multi_index<"scratchdata"_n, scratchdata> scratchdata_type;
 
     private:
-        void parse_header(struct header_info_struct* header_info, const bytes& header_rlp);
+        void parse_header(struct header_info_struct* header_info, bytes& header_rlp);
         void store_header(name msg_sender,
                           uint64_t block_num,
                           uint128_t difficulty,

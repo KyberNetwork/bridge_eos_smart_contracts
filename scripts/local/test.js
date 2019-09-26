@@ -1,7 +1,10 @@
+// example: bash scripts/local/deploy.sh; node scripts/local/test.js 8585001 8585001 8585070 0x4ce1301838af85b73 8585012
+
 const fs = require('fs')
 const Eos = require('eosjs')
 const path = require('path');
-const relay = require('./relay')
+const relay = require('../../tool/relay')
+const verify = require('../../tool/verify')
 
 function hexToBytes(hex) {
     hex = hex.replace("0x","")
@@ -17,6 +20,7 @@ async function main(){
     END_BLOCK = parseInt(process.argv[4])
     PRE_GENESIS_HEADER_HASH = hexToBytes(process.argv[5]) // 8 msbs from etherscan parent hash
     INIT = (START_BLOCK == GENESIS_BLOCK)
+    BLOCK_TO_VERIFY = parseInt((process.argv[6]))
 
     const keyPairArray = JSON.parse(fs.readFileSync("scripts/local/keys.json"))
     const relayerData =    {account: "relayer",   publicKey: keyPairArray[0][0], privateKey: keyPairArray[0][1]}
@@ -60,5 +64,15 @@ async function main(){
     }
 
     await relay.mainLoop(cfg, START_BLOCK, END_BLOCK)
+
+    verifierData = relayerData
+    verifierEos = Eos({ keyProvider: verifierData.privateKey /*, verbose: 'false' */})
+    verify.verify(verifierEos,
+                  verifierData.account,
+                  bridgeData.account,
+                  "tmp",
+                  false,
+                  50,
+                  BLOCK_TO_VERIFY)
 }
 main()

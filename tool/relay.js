@@ -3,58 +3,11 @@ const Eos = require('eosjs')
 const path = require('path');
 const assert = require('assert');
 const exec = require('await-exec')
-const Web3 = require("web3");
+const Web3 = require('web3');
 const ecc = require('eosjs-ecc');
+const common = require('./common');
 
 const snooze = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-function round_up(val, denom) {
-    return (parseInt((val + denom - 1) / denom) * parseInt(denom));
-}
-
-function hexToBytes(hex) {
-    hex = hex.replace("0x","")
-    for (var bytes = [], c = 0; c < hex.length; c += 2)
-    bytes.push(parseInt(hex.substr(c, 2), 16));
-    return bytes;
-}
-
-String.prototype.leftJustify = function( length, char ) {
-    var fill = [];
-    while ( fill.length + this.length < length ) {
-      fill[fill.length] = char;
-    }
-    return fill.join('') + this;
-}
-
-function parseRelayDaya(jsonFile){
-    rawdata = fs.readFileSync(jsonFile);
-    data = JSON.parse(rawdata);
-
-    header_rlp = data["header_rlp"].replace("0x", "");
-    header_rlp_buf = Buffer.from(header_rlp, 'hex')
-    proof_length = data["proof_length"]
-
-    dag_chunks = []
-    data['elements'].forEach(function(element) {
-        stripped = element.replace("0x", "");
-        padded = stripped.leftJustify(32 * 2, '0')
-        reversed = Uint8Array.from(Buffer.from(padded, 'hex')).reverse();
-        dag_chunks.push(reversed)
-    });
-    dags = Buffer.concat(dag_chunks);
-
-    proof_chunks = []
-    data["merkle_proofs"].forEach(function(element) {
-        stripped = element.replace("0x", "");
-        padded = stripped.leftJustify(16 * 2, '0')
-        proof_chunks.push(Buffer.from(padded, 'hex'))
-    });
-    proofs = Buffer.concat(proof_chunks);
-    
-    parsedData = {header_rlp: header_rlp_buf, proof_length: proof_length, dags: dags, proofs: proofs}
-    return parsedData;
-}
 
 function returnTuple(cfg, block) {
     const buf = Buffer.allocUnsafe(16);
@@ -145,7 +98,7 @@ async function relayBlock(cfg, bridgeAsRelayer, tuple, currentBlock) {
         if (!fs.existsSync(JSON_PATH)) {
             await exec(`ethashproof/cmd/relayer/relayer ${currentBlock} | sed -e '1,/Json output/d' > ${JSON_PATH}`)
         }
-        parsedData = parseRelayDaya(JSON_PATH);
+        parsedData = common.parseRelayDaya(JSON_PATH);
         if (cfg.deleteRelayFiles) fs.unlinkSync(JSON_PATH)
 
         try {
@@ -200,7 +153,7 @@ module.exports.mainLoop = async function(cfg, startBlock, endBlock)
     currentBlock = startBlock;
     while(currentBlock <= endBlock) {
         console.log("block", currentBlock)
-        currentTuple = returnTuple(cfg, round_up(currentBlock, cfg.anchorSmallInterval))
+        currentTuple = returnTuple(cfg, common.round_up(currentBlock, cfg.anchorSmallInterval))
 
         /* if first block in scratchpad, then first init scratchpad */
         if (currentBlock % cfg.anchorSmallInterval == 1) {

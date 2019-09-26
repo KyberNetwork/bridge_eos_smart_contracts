@@ -146,8 +146,11 @@ void verify_header(struct header_info_struct* header_info,
 }
 
 void hash_header_rlp(struct header_info_struct* header_info,
-                     const bytes& header_rlp,
+                     bytes& header_rlp,
                      rlp_item* items) {
+
+    uint rlp_byte_1 = header_rlp[1];
+    uint rlp_byte_2 = header_rlp[2];
 
     // calculate sealed header hash
     header_info->header_hash = keccak256(header_rlp.data(), header_rlp.size());
@@ -162,9 +165,13 @@ void hash_header_rlp(struct header_info_struct* header_info,
     eosio_assert(trim_len == (header_rlp.size() - 42), "wrong 2nd trim length");
 
     header_info->unsealed_header_hash = keccak256(header_rlp.data(), trim_len);
+
+    // return 2 first bytes to what they were
+    header_rlp[1] = rlp_byte_1;
+    header_rlp[2] = rlp_byte_2;
 }
 
-void Bridge::parse_header(struct header_info_struct* header_info, const bytes& header_rlp) {
+void Bridge::parse_header(struct header_info_struct* header_info, bytes& header_rlp) {
     rlp_item items[15];
     uint num_items;
     decode_list((uint8_t *)header_rlp.data(), items, &num_items);
@@ -219,7 +226,7 @@ ACTION Bridge::storeroots(const vector<uint64_t>& epoch_nums,
 };
 
 ACTION Bridge::relay(name msg_sender,
-                     const bytes& header_rlp,
+                     bytes& header_rlp,
                      const bytes& dags,
                      const bytes& proofs,
                      uint proof_length) {
@@ -242,7 +249,7 @@ ACTION Bridge::relay(name msg_sender,
     return;
 }
 
-ACTION Bridge::checkreceipt(const bytes& header_rlp,
+ACTION Bridge::checkreceipt(bytes& header_rlp,
                             const bytes& encoded_path,
                             const bytes& receipt_rlp,
                             const bytes& all_parent_nodes_rlps,
