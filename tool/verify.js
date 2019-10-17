@@ -14,14 +14,9 @@ module.exports.verify = async function(verifierEos,
 
     bridgeAsVerifier= await verifierEos.contract(bridgeAccount);
 
-    console.log("currentBlock", currentBlock)
-    console.log("smallInterval", smallInterval)
     rounded_down = common.round_down(currentBlock, smallInterval)
-    console.log("rounded_down", rounded_down)
     lower = (rounded_down == currentBlock) ? currentBlock - smallInterval + 1: rounded_down + 1;
-    console.log("lower", lower)
     upper = common.round_up(currentBlock, smallInterval)
-    console.log("upper", upper)
 
     allListElements = []
     for(i = lower; i <= upper; i++) {
@@ -52,5 +47,7 @@ module.exports.verify = async function(verifierEos,
         interval_list_proof : allProofs
     },
     { authorization: [`${verifierAccount}@active`] });
+    
+    console.log("verified block", currentBlock)
 
 }

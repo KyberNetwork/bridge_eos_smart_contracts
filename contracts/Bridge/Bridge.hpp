@@ -42,8 +42,7 @@ CONTRACT Bridge : public contract {
                      const vector<uint8_t>& proofs,
                      uint proof_length);
 
-        ACTION finalize(name msg_sender,
-                        uint64_t anchor_block_num);
+        ACTION finalize(name msg_sender, uint64_t anchor_block_num);
 
         ACTION veriflongest(const vector<uint8_t>& header_rlp_sha256,
                             uint64_t  block_num,
