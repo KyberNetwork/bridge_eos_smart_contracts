@@ -3,6 +3,7 @@ const Eos = require('eosjs')
 const path = require('path');
 const ecc = require('eosjs-ecc');
 const common = require('./common');
+const exec = require('await-exec')
 
 module.exports.verify = async function(verifierEos,
                                        verifierAccount,

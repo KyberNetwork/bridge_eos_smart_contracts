@@ -3,6 +3,7 @@
 const fs = require('fs')
 const Eos = require('eosjs')
 const path = require('path');
+const argv = require('yargs').argv
 const relay = require('../../tool/relay')
 const verify = require('../../tool/verify')
 
@@ -15,12 +16,12 @@ function hexToBytes(hex) {
 
 async function main(){
 
-    GENESIS_BLOCK = parseInt(process.argv[2])
-    START_BLOCK = parseInt(process.argv[3])
-    END_BLOCK = parseInt(process.argv[4])
-    PRE_GENESIS_HEADER_HASH = hexToBytes(process.argv[5]) // 8 msbs from etherscan parent hash
+    GENESIS_BLOCK = parseInt(argv.genesis)
+    START_BLOCK = parseInt(argv.start)
+    END_BLOCK = parseInt(argv.end)
+    PRE_GENESIS_HEADER_HASH = hexToBytes(argv.genesisHash) // 8 msbs from etherscan parent hash
     INIT = (START_BLOCK == GENESIS_BLOCK)
-    BLOCK_TO_VERIFY = parseInt((process.argv[6]))
+    BLOCK_TO_VERIFY = parseInt(argv.blockVerify)
 
     const keyPairArray = JSON.parse(fs.readFileSync("scripts/local/keys.json"))
     const relayerData =    {account: "relayer",   publicKey: keyPairArray[0][0], privateKey: keyPairArray[0][1]}
