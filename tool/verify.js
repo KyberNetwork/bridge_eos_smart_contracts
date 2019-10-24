@@ -45,7 +45,8 @@ module.exports.verify = async function(verifierEos,
     await bridgeAsVerifier.veriflongest({
         header_rlp_sha256 : currentBlockSha,
         block_num :currentBlock,
-        interval_list_proof : allProofs
+        interval_list_proof : allProofs,
+        min_accumulated_work_1k_res : 236802888840643 // 236802888840643073 without compressing
     },
     { authorization: [`${verifierAccount}@active`] });
     

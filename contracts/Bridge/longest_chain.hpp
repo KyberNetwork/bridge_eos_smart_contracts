@@ -258,7 +258,8 @@ ACTION Bridge::erasescratch(name msg_sender, uint64_t anchor_block_num) {
 // NOTE: byte vectors are used instead of uint64_t since actually not all 2^64 range is supported.
 ACTION Bridge::veriflongest(const bytes& header_rlp_sha256,
                             uint64_t block_num,
-                            vector<uint8_t>& interval_list_proof) {
+                            vector<uint8_t>& interval_list_proof,
+                            uint128_t min_accumulated_work_1k_res) {
     print("veriflongest for block num ", block_num);
 
     // TODO: remove the need for parsing buffer on-chain by arranging input conveniently for the contract.
@@ -283,6 +284,7 @@ ACTION Bridge::veriflongest(const bytes& header_rlp_sha256,
     // traverse to closest larger anchor in large interval resolution
     anchors_type anchors_inst(_self, _self.value);
     auto itr = anchors_inst.find(running_pointer);
+    uint128_t anchors_head_work = itr->total_difficulty;
 
     while (running_block_num > round_up(block_num, ANCHOR_BIG_INTERVAL)) {
         auto tmp_itr = anchors_inst.find(itr->previous_large);
@@ -298,6 +300,15 @@ ACTION Bridge::veriflongest(const bytes& header_rlp_sha256,
         running_pointer = itr->previous_small;
         running_block_num = itr->block_num;
     }
+
+    uint128_t total_work = anchors_head_work - itr->total_difficulty;
+    eosio_assert(total_work >= min_accumulated_work_1k_res * 1000,
+                 "min accumulated work not reached");
+    print("\n");
+    print("min_accumulated_work ", min_accumulated_work_1k_res);
+    print("\n");
+    print("total_work ", total_work);
+    print("\n");
 
     // verify stored sha256(list) is equal to given sha256 list proof
     uint64_t list_proof_sha256 = sha256_of_list(proof);

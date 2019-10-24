@@ -46,7 +46,8 @@ CONTRACT Bridge : public contract {
 
         ACTION veriflongest(const vector<uint8_t>& header_rlp_sha256,
                             uint64_t  block_num,
-                            vector<uint8_t>& interval_list_proof);
+                            vector<uint8_t>& interval_list_proof,
+                            uint128_t min_accumulated_work_1k_res);
 
 	// TODO: return header_rlp to const after elegantly removing its mutation later
         ACTION checkreceipt(vector<uint8_t>& header_rlp,

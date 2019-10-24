@@ -86,7 +86,6 @@ void verify_header(struct header_info_struct* header_info,
     s_mix[0].double_words[4] = nonce;
 
     // compute sha3-512 hash and replicate across mix
-
     uint8_t res[64];
     keccak512(res, s_mix->bytes, 40);
     memcpy(s_mix->bytes, res, 64);
