@@ -22,6 +22,7 @@ async function main(){
     PRE_GENESIS_HEADER_HASH = hexToBytes(argv.genesisHash) // 8 msbs from etherscan parent hash
     INIT = (START_BLOCK == GENESIS_BLOCK)
     BLOCK_TO_VERIFY = parseInt(argv.blockVerify)
+    MIN_ACCUMULATED_WORK_1K_RES = 236802888840643 // 236802888840643073 without compressing
 
     const keyPairArray = JSON.parse(fs.readFileSync("scripts/local/keys.json"))
     const relayerData =    {account: "relayer",   publicKey: keyPairArray[0][0], privateKey: keyPairArray[0][1]}
@@ -74,6 +75,7 @@ async function main(){
                   "tmp",
                   false,
                   50,
-                  BLOCK_TO_VERIFY)
+                  BLOCK_TO_VERIFY,
+                  MIN_ACCUMULATED_WORK_1K_RES)
 }
 main()

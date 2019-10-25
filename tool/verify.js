@@ -11,7 +11,8 @@ module.exports.verify = async function(verifierEos,
                                        dirForRelayFiles,
                                        deleteRelayFiles,
                                        smallInterval,
-                                       currentBlock){
+                                       currentBlock,
+                                       minAccumulatedWork1kRes){
 
     bridgeAsVerifier= await verifierEos.contract(bridgeAccount);
 
@@ -46,7 +47,7 @@ module.exports.verify = async function(verifierEos,
         header_rlp_sha256 : currentBlockSha,
         block_num :currentBlock,
         interval_list_proof : allProofs,
-        min_accumulated_work_1k_res : 236802888840643 // 236802888840643073 without compressing
+        min_accumulated_work_1k_res : minAccumulatedWork1kRes
     },
     { authorization: [`${verifierAccount}@active`] });
     

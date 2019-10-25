@@ -304,11 +304,6 @@ ACTION Bridge::veriflongest(const bytes& header_rlp_sha256,
     uint128_t total_work = anchors_head_work - itr->total_difficulty;
     eosio_assert(total_work >= min_accumulated_work_1k_res * 1000,
                  "min accumulated work not reached");
-    print("\n");
-    print("min_accumulated_work ", min_accumulated_work_1k_res);
-    print("\n");
-    print("total_work ", total_work);
-    print("\n");
 
     // verify stored sha256(list) is equal to given sha256 list proof
     uint64_t list_proof_sha256 = sha256_of_list(proof);
