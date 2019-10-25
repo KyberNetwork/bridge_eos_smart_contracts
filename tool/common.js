@@ -45,4 +45,3 @@ module.exports.parseRelayDaya = function parseRelayDaya(jsonFile){
     return parsedData;
 }
 
-

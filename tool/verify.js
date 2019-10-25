@@ -24,7 +24,6 @@ module.exports.verify = async function(verifierEos,
     for(i = lower; i <= upper; i++) {
 
         // get header rlps of all small interval block from relay tool and hash it with sha256
-
         // TODO - shared with relay.js, can unite
         JSON_PATH = dirForRelayFiles + "/" + "ethashproof_output_" + i + ".json"
         if (!fs.existsSync(JSON_PATH)) {
@@ -39,7 +38,7 @@ module.exports.verify = async function(verifierEos,
     }
 
     index = (currentBlock == smallInterval) ? smallInterval - 1 :
-                                               currentBlock % smallInterval - 1
+                                              currentBlock % smallInterval - 1
     currentBlockSha = Buffer.from(allListElements[index])
     allProofs = Buffer.concat(allListElements)
 
