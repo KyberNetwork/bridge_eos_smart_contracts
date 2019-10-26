@@ -1,23 +1,25 @@
 {
-  "name": "waterloo",
+  "name": "bridge_eos_smart_contracts",
   "version": "1.0.0",
-  "description": "",
-  "main": "",
+  "description": "## Summary",
+  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KyberNetwork/bridge_eos_smart_contracts.git"
+  },
+  "keywords": [],
   "author": "",
   "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/KyberNetwork/bridge_eos_smart_contracts/issues"
+  },
+  "homepage": "https://github.com/KyberNetwork/bridge_eos_smart_contracts#readme",
   "dependencies": {
-    "await-exec": "^0.1.2",
-    "bignumber.js": "^8.0.1",
-    "chai": "^4.2.0",
-    "eosjs": "16.0.8",
-    "eosjs-ecc": "^4.0.4",
-    "math": "0.0.3",
-    "mocha": "^5.2.0",
-    "rlp": "^2.2.3",
-    "web3": "^1.2.1",
-    "yargs": "^13.3.0"
+    "eosjs": "^16.0.8",
+    "waterloo-bridge": "file:waterloo-bridge",
+    "yargs": "^14.2.0"
   }
 }

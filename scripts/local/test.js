@@ -1,11 +1,10 @@
-// example: bash scripts/local/deploy.sh; node scripts/local/test.js 8585001 8585001 8585070 0x4ce1301838af85b73 8585012
+// example: bash scripts/local/deploy.sh; node scripts/local/test.js --genesis=8585001 --genesisHash=0x4ce1301838af85b73 --start=8585001 --end=8585170 --blockVerify=8585005
 
 const fs = require('fs')
 const Eos = require('eosjs')
 const path = require('path');
 const argv = require('yargs').argv
-const relay = require('../../tool/relay')
-const verify = require('../../tool/verify')
+const waterloo = require('../../waterloo-bridge')
 
 function hexToBytes(hex) {
     hex = hex.replace("0x","")
@@ -64,7 +63,7 @@ async function main(){
             deleteRelayFiles : false
         }
     
-        await relay.mainLoop(cfg, START_BLOCK, END_BLOCK)
+        await waterloo.mainLoop(cfg, START_BLOCK, END_BLOCK)
     }
 
     doVerify = !!argv.blockVerify
@@ -74,7 +73,7 @@ async function main(){
 
         verifierData = relayerData
         verifierEos = Eos({ keyProvider: verifierData.privateKey /*, verbose: 'false' */})
-        verify.verify(verifierEos,
+        waterloo.verify(verifierEos,
                       verifierData.account,
                       bridgeData.account,
                       "tmp",
