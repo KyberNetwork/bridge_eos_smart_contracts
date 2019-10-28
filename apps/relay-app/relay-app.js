@@ -1,5 +1,7 @@
-// example: bash scripts/local/bridge_bringup.sh; node apps/relay-app.js --cfg scripts/local/relay_app_sample_input/cfg.json --genesis=8585001 --genesisHash=0x4ce1301838af85b73 --start=8585001 --end=8585170 --blockVerify=8585005
-
+/* example:
+     bash scripts/local/bridge_bringup.sh
+     node apps/relay-app/relay-app.js --cfg scripts/local/relay_app_sample_input/cfg.json --genesis=8585001 --start=8585001 --end=8585170 --blockVerify=8585005
+*/
 
 const fs = require('fs')
 const Eos = require('eosjs')
@@ -26,26 +28,22 @@ async function main(){
         bridgeEos = Eos({ keyProvider: deployerPrivateKey /*, verbose: 'false' */})
 
         GENESIS_BLOCK = parseInt(argv.genesis)
-        PRE_GENESIS_HEADER_HASH = hexToBytes(argv.genesisHash) // 8 msbs from etherscan parent hash
 
-        bridgeAsBridge = await bridgeEos.contract(cfg.deployer);
+        await waterloo.storeroots(
+                bridgeEos,
+                cfg.deployer,
+                cfg.deployer,
+                roots.epochNums,
+                roots.dagRoots
+        )
 
-        for (i = 0; i < roots.epochNums.length; i++) { 
-            await bridgeAsBridge.storeroots({
-                epoch_nums : roots.epochNums[i],
-                dag_roots : roots.dagRoots[i],
-                },
-                { authorization: [`${cfg.deployer}@active`] 
-            });
-        }
-
-        await bridgeAsBridge.setgenesis({
-            genesis_block_num : GENESIS_BLOCK,
-            previous_header_hash : PRE_GENESIS_HEADER_HASH, 
-            initial_difficulty : 0
-            },
-            { authorization: [`${cfg.deployer}@active`] 
-        });
+        await waterloo.setgenesis(
+            bridgeEos,
+            cfg.deployer,
+            cfg.deployer,
+            GENESIS_BLOCK,
+            cfg.eth_url
+        )
     }
 
     doRelay = (argv.start && argv.end)
