@@ -1,6 +1,7 @@
 [submodule "ethashproof"]
 	path = ethashproof
-	url = git@github.com:tranvictor/ethashproof.git
+	#url = git@github.com:tranvictor/ethashproof.git
+	url = git@github.com:talbaneth/ethashproof.git
 [submodule "eth-proof"]
 	path = eth-proof
 	url = git@github.com:talbaneth/eth-proof.git
