@@ -13,15 +13,15 @@ https://github.com/KyberNetwork/bridge_eth_smart_contracts
 
 1. Create 2 accounts - for the bridge and for a blocks relayer:  
 For using existing accounts just set BRIDGE_ACCOUNT and RELAYER_ACCOUNT and skip the creation.
-`BRIDGE_ACCOUNT=bridge`
-`BRIDGE_PUBLIC_KEY=EOS5CYr5DvRPZvfpsUGrQ2SnHeywQn66iSbKKXn4JDTbFFr36TRTX`
-`cleos create account eosio $BRIDGE_ACCOUNT $BRIDGE_PUBLIC_KEY`
-`RELAYER_ACCOUNT=relay`
-`RELAYER_PUBLIC_KEY=EOS5BVngJvx5Y1f4tdzK1bVykB79ps1ZRtDBvJo4d7kELvSta5ryN`
-`cleos create account eosio $RELAYER_ACCOUNT $RELAYER_PUBLIC_KEY`
+`BRIDGE_ACCOUNT=bridge`  
+`BRIDGE_PUBLIC_KEY=EOS5CYr5DvRPZvfpsUGrQ2SnHeywQn66iSbKKXn4JDTbFFr36TRTX`  
+`cleos create account eosio $BRIDGE_ACCOUNT $BRIDGE_PUBLIC_KEY`  
+`RELAYER_ACCOUNT=relay`  
+`RELAYER_PUBLIC_KEY=EOS5BVngJvx5Y1f4tdzK1bVykB79ps1ZRtDBvJo4d7kELvSta5ryN`  
+`cleos create account eosio $RELAYER_ACCOUNT $RELAYER_PUBLIC_KEY`  
 
 2. Compile and deploy the bridge contacts
-`bash scripts/compile.sh`
+`bash scripts/compile.sh`  
 `cleos set contract $BRIDGE_ACCOUNT contracts/Bridge Bridge.wasm --abi Bridge.abi -p $BRIDGE_ACCOUNT@active`
 
 3. Create keypair files and a cfg file for the relay app. For example see references in scripts/local/relay_app_sample_input dir:
