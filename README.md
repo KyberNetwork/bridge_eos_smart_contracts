@@ -20,7 +20,7 @@ For using existing accounts just set BRIDGE_ACCOUNT and RELAYER_ACCOUNT and skip
 `RELAYER_PUBLIC_KEY=EOS5BVngJvx5Y1f4tdzK1bVykB79ps1ZRtDBvJo4d7kELvSta5ryN`  
 `cleos create account eosio $RELAYER_ACCOUNT $RELAYER_PUBLIC_KEY`  
 
-2. Compile and deploy the bridge contacts
+2. Compile and deploy the bridge contacts  
 `bash scripts/compile.sh`  
 `cleos set contract $BRIDGE_ACCOUNT contracts/Bridge Bridge.wasm --abi Bridge.abi -p $BRIDGE_ACCOUNT@active`
 
