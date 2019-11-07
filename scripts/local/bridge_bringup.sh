@@ -19,4 +19,3 @@ cleos set contract $BRIDGE_ACCOUNT contracts/Bridge Bridge.wasm --abi Bridge.abi
 # fill out cfg.json and keypair files.
 # run relay-app.js
 
-
