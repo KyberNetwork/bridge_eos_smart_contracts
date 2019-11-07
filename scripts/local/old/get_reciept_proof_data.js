@@ -1,15 +1,15 @@
 var Web3 = require('web3')
-var EP   = require('./../../eth-proof/index')
+var EP   = require('./../../../eth-proof/index')
 var eP   = new EP(new Web3.providers.HttpProvider("https://mainnet.infura.io"))
 const rlp = require('rlp');
 const fs = require("fs")
 
 eP.getReceiptProof(process.argv[2]).then((result)=>{
 
-    //verify proof is indeed correct 
+    // verify proof is indeed correct 
     EP.receipt(result.path, result.value, result.parentNodes, result.header, result.blockHash)
   
-    // outpu to json
+    // output to json
     var outputObject = {};
     outputObject["value_rlp"] = Buffer.from(rlp.encode(result.value),'hex').toString('hex').match(/../g).join(' ')
     outputObject["parent_nodes_rlp"] = []
