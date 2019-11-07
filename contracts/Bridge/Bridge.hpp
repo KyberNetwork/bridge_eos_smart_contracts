@@ -49,7 +49,7 @@ CONTRACT Bridge : public contract {
                             vector<uint8_t>& interval_list_proof,
                             uint128_t min_accumulated_work_1k_res);
 
-	// TODO: return header_rlp to const after elegantly removing its mutation later
+        // TODO: return header_rlp to const after elegantly removing its mutation later
         ACTION checkreceipt(vector<uint8_t>& header_rlp,
                             const vector<uint8_t>& encoded_path,
                             const vector<uint8_t>& receipt_rlp,
@@ -66,6 +66,14 @@ CONTRACT Bridge : public contract {
             // TODO - only 8B out of the hash, in production add 32B to result and compare
             uint64_t receipt_header_hash;
             uint64_t primary_key() const { return receipt_header_hash; }
+        };
+
+        TABLE onlongest {
+            // TODO - only 8B out of the hash, in production add 32B to result and compare
+            uint64_t header_sha256;
+            uint64_t accumulated_work;
+            // TODO - add sender so can support deleting of entries
+            uint64_t primary_key() const { return header_sha256; }
         };
 
         // internal in data structure module:
@@ -109,6 +117,7 @@ CONTRACT Bridge : public contract {
         typedef eosio::singleton<"state"_n, state> state_type;
         typedef eosio::multi_index<"roots"_n, roots> roots_type;
         typedef eosio::multi_index<"receipts"_n, receipts> receipts_type;
+        typedef eosio::multi_index<"onlongest"_n, onlongest> onlongest_type;
         typedef eosio::multi_index<"anchors"_n,
                                    anchors,
                                    indexed_by<"headerhash"_n, const_mem_fun<anchors, uint64_t, &anchors::by_header_hash>>>

@@ -13,14 +13,23 @@ const bytes lock_contract_address{0x98, 0x03, 0x58, 0x36, 0x04, 0x09, 0xb1, 0xcc
                                   0x3a, 0x91, 0x6b, 0xc0, 0xbf, 0x6f, 0x52, 0xf7, 0x75,
                                   0x24, 0x2a};
 
-// TODO - duplicated with Bridge contract, see if can moved to common place.
+// TODO - tables duplicated with Bridge contract, see if can moved to common place.
 struct receipts {
     // TODO - only 8B out of the hash, in production add 32B to result and compare
     uint64_t receipt_header_hash;
     uint64_t primary_key() const { return receipt_header_hash; }
 };
-typedef eosio::multi_index<"receipts"_n, receipts> receipts_type;
 
+TABLE onlongest {
+    // TODO - only 8B out of the hash, in production add 32B to result and compare
+    uint64_t header_sha256;
+    uint64_t accumulated_work;
+    // TODO - add sender so can support deleting of entries
+    uint64_t primary_key() const { return header_sha256; }
+};
+
+typedef eosio::multi_index<"receipts"_n, receipts> receipts_type;
+typedef eosio::multi_index<"onlongest"_n, onlongest> onlongest_type;
 
 CONTRACT Issue : public contract {
 
@@ -113,20 +122,39 @@ ACTION Issue::config(name token_contract, symbol token_symbol, name bridge_contr
     state_inst.set(s, _self);
 }
 
-ACTION Issue::issue(const bytes& header_rlp, const bytes& receipt_rlp, uint event_num_in_tx) {
+// TODO: duplicated from longest chain - make shared in common
+uint64_t sha_and_crop(const uint8_t *input, uint size) {
+    capi_checksum256 sha_csum = sha256(input, size);
+
+    uint64_t res = 0;
+    for(int i = 0; i < 8; i++){
+        res |= ((uint64_t)(sha_csum.hash[i]) << (i * 8));
+    }
+    return res;
+}
+
+ACTION Issue::issue(const bytes& header_rlp,
+                    const bytes& receipt_rlp,
+                    uint event_num_in_tx) {
     state_type state_inst(_self, _self.value);
     auto s = state_inst.get();
 
+    // verify on longest chain
+    onlongest_type onlongest_table(s.bridge_contract, s.bridge_contract.value);
+    uint64_t header_sha256 = sha_and_crop(header_rlp.data(), header_rlp.size());
+    auto itr = onlongest_table.find(header_sha256);
+    eosio_assert(itr != onlongest_table.end(),
+                 "header not verified on longest path in bridge contract");
+
+    // verify min work amount was done
+    //// TODO - move to input.
+    uint128_t min_accumulated_work_1k_res = 100;
+    ///////////////
+    eosio_assert(itr->accumulated_work >= min_accumulated_work_1k_res * 1000,
+                 "min accumulated work not reached");
+
     // calculate sealed header hash
     capi_checksum256 header_hash = keccak256(header_rlp.data(), header_rlp.size());
-
-    // verify longest path
-    bytes header_hash_vec(32);
-    std::copy(header_hash.hash, header_hash.hash + 32, header_hash_vec.begin());
-    action {permission_level{_self, "active"_n},
-            s.bridge_contract,
-            "veriflongest"_n,
-            make_tuple(header_hash_vec)}.send();
 
     // make sure the reciept exists in bridge contract
     uint64_t receipt_header_hash = get_reciept_header_hash(receipt_rlp, header_hash);

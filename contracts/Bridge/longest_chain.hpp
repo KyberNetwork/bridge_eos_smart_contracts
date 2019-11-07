@@ -259,7 +259,7 @@ ACTION Bridge::erasescratch(name msg_sender, uint64_t anchor_block_num) {
 ACTION Bridge::veriflongest(const bytes& header_rlp_sha256,
                             uint64_t block_num,
                             vector<uint8_t>& interval_list_proof,
-                            uint128_t min_accumulated_work_1k_res) {
+                            uint128_t min_accumulated_work_1k_res /* TODO: deprecated, remove */) {
     print("veriflongest for block num ", block_num);
 
     // TODO: remove the need for parsing buffer on-chain by arranging input conveniently for the contract.
@@ -301,12 +301,28 @@ ACTION Bridge::veriflongest(const bytes& header_rlp_sha256,
         running_block_num = itr->block_num;
     }
 
-    uint128_t total_work = anchors_head_work - itr->total_difficulty;
-    eosio_assert(total_work >= min_accumulated_work_1k_res * 1000,
-                 "min accumulated work not reached");
-
     // verify stored sha256(list) is equal to given sha256 list proof
     uint64_t list_proof_sha256 = sha256_of_list(proof);
     eosio_assert(list_proof_sha256 == itr->list_hash, "given list hash diff with stored list hash");
 
+    eosio_assert(anchors_head_work > itr->total_difficulty, "accumulated work is not positive");
+    uint128_t total_work = anchors_head_work - itr->total_difficulty;
+
+    // store evidence that the block is on the longest chain
+    onlongest_type onlongest_inst(_self, _self.value);
+    auto longest_itr = onlongest_inst.find(header_sha256);
+    bool exists = (longest_itr != onlongest_inst.end());
+    if (!exists) {
+        onlongest_inst.emplace(_self, [&](auto& s) {
+            s.header_sha256 = header_sha256;
+            s.accumulated_work = total_work;
+        });
+    } else {
+        if(total_work > longest_itr->accumulated_work) {
+            onlongest_inst.modify(longest_itr, _self, [&](auto& s) {
+                s.header_sha256 = header_sha256;
+                s.accumulated_work = total_work;
+            });
+        }
+    }
 }
