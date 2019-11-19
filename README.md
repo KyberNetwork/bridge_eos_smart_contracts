@@ -33,7 +33,7 @@ For using existing accounts just set BRIDGE_ACCOUNT and RELAYER_ACCOUNT and skip
 `node apps/relay-app/relay-app.js --cfg scripts/local/relay_app_sample_input/cfg.json --genesis=8585001 --start=8585001 --end=8585170`
 
 5. In order to verify existence of a relayed block on the longest chain run the --verify option in the relay app. For example:
-`node apps/relay-app/relay-app.js --blockVerify=8585005`
+`node apps/wknc-app/wknc-app.js --cfg scripts/local/wknc_app_sample_input/cfg.json --blockVerify=8585005`
 
 ## Note
 In eth-proof/node_modules/xhr2/lib/xhr2.js:719, need to fix absolute url string:

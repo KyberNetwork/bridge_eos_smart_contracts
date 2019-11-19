@@ -2,7 +2,6 @@
 
 const fs = require('fs')
 const Eos = require('eosjs')
-const path = require('path');
 const argv = require('yargs').argv
 const waterloo = require('../../waterloo-bridge') // TODO remove path when publishing
 

@@ -20,6 +20,7 @@
   "dependencies": {
     "eosjs": "^16.0.8",
     "waterloo-bridge": "file:waterloo-bridge",
+    "web3": "^1.2.2",
     "yargs": "^14.2.0"
   }
 }
