@@ -10,9 +10,9 @@
 
 * wknc-app:
 all under same api call:
-- call verify block on longest path (move functionality from relay app) 
-- call check receipt (for now get tx + block hash, later add monitoring for block and tx)
-- call issue (calls eth-proof package to get reciept + header rlp, or uses a get service from bridge)
+- call verify block on longest path (done - move functionality from relay app) 
+- call check receipt (done 0 for now get tx + block hash, later add monitoring for block and tx)
+- call issue (currently uses reciept + header rlp from cache)
 
 
 

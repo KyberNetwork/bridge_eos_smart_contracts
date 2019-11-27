@@ -11,9 +11,6 @@ VERIFIER_ACCOUNT=verifier
 VERIFIER_PUBLIC_KEY=EOS5BVngJvx5Y1f4tdzK1bVykB79ps1ZRtDBvJo4d7kELvSta5ryN
 cleos create account eosio $VERIFIER_ACCOUNT $VERIFIER_PUBLIC_KEY
 
-exit
-###############
-
 PUBLIC_KEY=EOS5CYr5DvRPZvfpsUGrQ2SnHeywQn66iSbKKXn4JDTbFFr36TRTX
 
 cleos create account eosio issue $PUBLIC_KEY

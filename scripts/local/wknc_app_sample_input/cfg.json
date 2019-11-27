@@ -2,10 +2,11 @@
     "bridge" : "bridge",
     "verifier_keypair_json" : "scripts/local/wknc_app_sample_input/verifier_keypair.json",
     "verifier" : "verifier",
+    "wknc": "issue",
     "eth_url" : "https://mainnet.infura.io",
     "dir_for_verify_files" : "tmp",
     "delete_verify_files" : false,
     "anchor_small_interval" : 50,
     "anchor_big_interval" : 1000,
-    "min_accumulated_work_1k_res" : 236802888840643 
+    "min_accumulated_work_1k_res" : 236802888840643
 }
