@@ -32,8 +32,16 @@ For using existing accounts just set BRIDGE_ACCOUNT and RELAYER_ACCOUNT and skip
 4. Run the relay app, pointing to your cfg file location: for example:
 `node apps/relay-app/relay-app.js --cfg scripts/local/relay_app_sample_input/cfg.json --genesis=8585001 --start=8585001 --end=8585170`
 
-5. In order to verify existence of a relayed block on the longest chain run the --verify option in the relay app. For example:
-`node apps/wknc-app/wknc-app.js --cfg scripts/local/wknc_app_sample_input/cfg.json --blockVerify=8585005`
+
+## WKNC sample app:
+
+The WKNC sample app demonstrates how to use the bridge. It uses the stored headers data in order to validate locking of tokens on an Ethereum contract and issuing equivalent tokens on the EOS side.
+
+1. Create accounts and deploy contracts:
+`bash scripts/local/issue_bringup.sh`
+
+2. Issuing tokens is comprised of verifying a block and its receipt, as well as specifying the issue cmd:
+`node apps/wknc-app/wknc-app.js --cfg scripts/local/wknc_app_sample_input/cfg.json --blockVerify=8123247 --receiptVerify=0x47d76b0a9290ad65db9e33301e9f68c45c005942ebb4c7f91503424cc599fcbf --issue`
 
 ## Note
 In eth-proof/node_modules/xhr2/lib/xhr2.js:719, need to fix absolute url string:
