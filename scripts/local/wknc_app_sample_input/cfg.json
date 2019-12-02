@@ -8,5 +8,6 @@
     "delete_verify_files" : false,
     "anchor_small_interval" : 50,
     "anchor_big_interval" : 1000,
-    "min_accumulated_work_1k_res" : 236802888840643
+    "min_accumulated_work_1k_res" : 236802888840643,
+    "event_num" : 1
 }

@@ -65,7 +65,7 @@ async function main(){
         await WkncAsVerifier.issue({ 
             header_rlp:header_rlp,
             receipt_rlp:receipt_rlp,
-            event_num_in_tx:1 // TODO : support event num dynamically
+            event_num_in_tx:cfg.event_num // TODO : support event num dynamically
            },
         { authorization: [`${cfg.verifier}@active`] } )
     }
