@@ -1,7 +1,7 @@
 #include <math.h>
 
 #include "../Common/common.hpp"
-#include "../Common/nested_rlp.hpp"
+#include "../Common/rlp/nested_rlp.hpp"
 
 // signature for "Lock(uint256,uint64,uint256)"
 const bytes lock_signature{0xff, 0x0e, 0x8e, 0xf5, 0x8d, 0x4e, 0x45, 0x21, 0x66, 0xe4,

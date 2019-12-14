@@ -1,5 +1,5 @@
 #include "../Common/common.hpp"
-#include "../Common/rlp.hpp"
+#include "../Common/rlp/rlp.hpp"
 
 CONTRACT Bridge : public contract {
 

@@ -1,7 +1,7 @@
 #include "Bridge.hpp"
 
 #include "../Common/common.hpp"
-#include "../Common/rlp.hpp"
+#include "../Common/rlp/rlp.hpp"
 #include "dag_merkle.hpp"
 #include "dag_sizes.h"
 #include "long_mult.hpp"

@@ -30,8 +30,7 @@ For using existing accounts just set BRIDGE_ACCOUNT and RELAYER_ACCOUNT and skip
 	**cfg.json**
 
 4. Run the relay app, pointing to your cfg file location: for example:
-`node apps/relay-app/relay-app.js --cfg scripts/local/relay_app_sample_input/cfg.json --genesis=8585001 --start=8585001 --end=8585170`
-
+`node apps/relay-app/relay-app.js --cfg scripts/local/relay_app_sample_input/cfg.json --genesis=8123001 --start=8123001 --end=8123306`
 
 ## WKNC sample app:
 

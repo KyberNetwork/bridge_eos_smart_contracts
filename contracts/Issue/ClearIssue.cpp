@@ -1,7 +1,7 @@
 #include <math.h>
 
 #include "../Common/common.hpp"
-#include "../Common/nested_rlp.hpp"
+#include "../Common/rlp/nested_rlp.hpp"
 
 
 CONTRACT Issue : public contract {
