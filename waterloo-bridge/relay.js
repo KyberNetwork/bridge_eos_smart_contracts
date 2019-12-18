@@ -98,7 +98,15 @@ async function relayBlock(cfg, bridgeAsRelayer, tuple, currentBlock) {
         if (!fs.existsSync(JSON_PATH)) {
             await exec(`ethashproof/cmd/relayer/relayer ${currentBlock} | sed -e '1,/Json output/d' > ${JSON_PATH}`)
         }
-        parsedData = common.parseRelayDaya(JSON_PATH);
+        try {
+            parsedData = common.parseRelayDaya(JSON_PATH);
+        } catch (e) {
+            // failed to parse
+            console.log("waiting for chain to produce block")
+            fs.unlinkSync(JSON_PATH)
+            continue
+        }
+
         if (cfg.deleteRelayFiles) fs.unlinkSync(JSON_PATH)
 
         try {

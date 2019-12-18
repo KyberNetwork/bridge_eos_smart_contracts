@@ -14,6 +14,10 @@ function fromStrToBuff(inputStr) {
     return asBuff
 }
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 module.exports.verifyReceipt= async function(verifierEos,
                                        verifierAccount,
                                        bridgeAccount,
@@ -58,6 +62,8 @@ module.exports.verifyReceipt= async function(verifierEos,
 
         }).catch((e)=>{console.log(e)})
     }
+
+    await sleep(10000)
 
     data = JSON.parse(fs.readFileSync(JSON_PATH));
 

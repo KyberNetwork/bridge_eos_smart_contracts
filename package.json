@@ -19,6 +19,7 @@
   "homepage": "https://github.com/KyberNetwork/bridge_eos_smart_contracts#readme",
   "dependencies": {
     "eosjs": "^16.0.8",
+    "node-rest-client-promise": "^3.1.1",
     "waterloo-bridge": "file:waterloo-bridge",
     "web3": "^1.2.2",
     "yargs": "^14.2.0"

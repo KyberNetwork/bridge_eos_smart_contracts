@@ -6,8 +6,8 @@
     "eth_url" : "https://mainnet.infura.io",
     "dir_for_verify_files" : "tmp",
     "delete_verify_files" : false,
-    "anchor_small_interval" : 50,
-    "anchor_big_interval" : 1000,
+    "anchor_small_interval" : 5,
+    "anchor_big_interval" : 100,
     "min_accumulated_work_1k_res" : 236802888840643,
     "event_num" : 1
 }

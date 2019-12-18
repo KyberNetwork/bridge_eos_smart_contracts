@@ -4,8 +4,8 @@
     "relayer" : "relay",
     "relayer_keypair_json" : "scripts/local/relay_app_sample_input/relayer_keypair.json",
     "eth_url" : "https://mainnet.infura.io",
-    "anchor_small_interval" : 50,
-    "anchor_big_interval" : 1000,
+    "anchor_small_interval" : 5,
+    "anchor_big_interval" : 100,
     "dir_for_relay_files" : "tmp",
     "delete_relay_files" : false,
     "min_accumulated_work_1k_res" : 236802888840643 

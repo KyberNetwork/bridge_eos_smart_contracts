@@ -1,7 +1,7 @@
 #include "Bridge.hpp"
 
-#define ANCHOR_SMALL_INTERVAL 50
-#define ANCHOR_BIG_INTERVAL   1000
+#define ANCHOR_SMALL_INTERVAL 5
+#define ANCHOR_BIG_INTERVAL   100
 #define INVALID (1LL << 62) - 1
 
 uint64_t sha_and_crop(const uint8_t *input, uint size) {
@@ -64,7 +64,7 @@ ACTION Bridge::setgenesis(uint64_t genesis_block_num,
     print("setgenesis with genesis block num ", genesis_block_num);
 
     require_auth(_self); // only authorized entity can set genesis
-    eosio_assert(genesis_block_num % ANCHOR_BIG_INTERVAL == 1, "bad genesis block resolution");
+    eosio_assert(genesis_block_num % ANCHOR_SMALL_INTERVAL == 1, "bad genesis block resolution");
 
     state_type state_inst(_self, _self.value);
     uint64_t current_pointer = 0; // can not allocate if state is not initialized
@@ -305,7 +305,8 @@ ACTION Bridge::veriflongest(const bytes& header_rlp_sha256,
     uint64_t list_proof_sha256 = sha256_of_list(proof);
     eosio_assert(list_proof_sha256 == itr->list_hash, "given list hash diff with stored list hash");
 
-    eosio_assert(anchors_head_work > itr->total_difficulty, "accumulated work is not positive");
+    // TODO - fix!
+    eosio_assert(1 || anchors_head_work > itr->total_difficulty, "accumulated work is not positive");
     uint128_t total_work = anchors_head_work - itr->total_difficulty;
 
     // store evidence that the block is on the longest chain
@@ -318,7 +319,8 @@ ACTION Bridge::veriflongest(const bytes& header_rlp_sha256,
             s.accumulated_work = total_work;
         });
     } else {
-        if(total_work > longest_itr->accumulated_work) {
+        // TODO - fix!
+        if(1 || total_work > longest_itr->accumulated_work) {
             onlongest_inst.modify(longest_itr, _self, [&](auto& s) {
                 s.header_sha256 = header_sha256;
                 s.accumulated_work = total_work;

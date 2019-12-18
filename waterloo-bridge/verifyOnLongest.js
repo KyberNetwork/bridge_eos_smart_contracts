@@ -26,6 +26,7 @@ module.exports.verifyOnLongest = async function(verifierEos,
         // get header rlps of all small interval block from relay tool and hash it with sha256
         // TODO - shared with relay.js, can unite
         JSON_PATH = dirForRelayFiles + "/" + "ethashproof_output_" + i + ".json"
+        console.log("looking for JSON_PATH", JSON_PATH)
         if (!fs.existsSync(JSON_PATH)) {
             await exec(`ethashproof/cmd/relayer/relayer ${currentBlock} | sed -e '1,/Json output/d' > ${JSON_PATH}`)
         }
@@ -37,8 +38,7 @@ module.exports.verifyOnLongest = async function(verifierEos,
         allListElements.push(reversed)
     }
 
-    index = (currentBlock == smallInterval) ? smallInterval - 1 :
-                                              currentBlock % smallInterval - 1
+    index = (currentBlock - 1) % smallInterval
     currentBlockSha = Buffer.from(allListElements[index])
     allProofs = Buffer.concat(allListElements)
 

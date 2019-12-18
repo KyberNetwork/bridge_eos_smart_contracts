@@ -1,5 +1,5 @@
 # in one terminal:
-rm -rf ~/.local/share/eosio/nodeos/data; nodeos -e -p eosio --plugin eosio::chain_api_plugin --plugin eosio::history_api_plugin --contracts-console --verbose-http-errors --filter-on "*"
+# rm -rf ~/.local/share/eosio/nodeos/data; nodeos -e -p eosio --plugin eosio::chain_api_plugin --plugin eosio::history_api_plugin --contracts-console --verbose-http-errors --filter-on "*"
  
 #in another terminal
 DIR=bridge_$(date +"%Y_%m_%d_%H_%M")
