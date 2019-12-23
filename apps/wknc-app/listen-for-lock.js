@@ -19,7 +19,7 @@ async function getContractAbi() {
 async function handleLock(blockNum, txHash) {
     console.log("handleLock")
 
-    sleeptTime = 120000
+    sleeptTime = 180000
     console.log("waiting " + sleeptTime/1000 + " seconds for work to accumulate before issuing pegged tokens")
     await sleep(sleeptTime)
     await seq.issueSequence("scripts/local/wknc_app_sample_input/cfg.json",
