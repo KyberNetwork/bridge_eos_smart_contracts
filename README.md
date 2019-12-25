@@ -42,6 +42,8 @@ The WKNC sample app demonstrates how to use the bridge. It uses the stored heade
 2. Issuing tokens is comprised of verifying a block and its receipt, as well as specifying the issue cmd:
 `node apps/wknc-app/wknc-app.js --cfg scripts/local/wknc_app_sample_input/cfg.json --blockVerify=8123247 --receiptVerify=0x47d76b0a9290ad65db9e33301e9f68c45c005942ebb4c7f91503424cc599fcbf --issue`
 
+[Demo of relaying headers and issuing WKNC tokens](https://www.youtube.com/watch?v=GciXvqAQHAo)
+
 ## Note
 In eth-proof/node_modules/xhr2/lib/xhr2.js:719, need to fix absolute url string:
 
