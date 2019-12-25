@@ -4,7 +4,7 @@
 #in another terminal
 DIR=bridge_$(date +"%Y_%m_%d_%H_%M")
 REPO=git@github.com:KyberNetwork/bridge_eos_smart_contracts.git
-BRANCH=develop
+BRANCH=master
 EXISTING_TMP_DIR='/home/talbaneth/eos/bridge_eos_smart_contracts/tmp'
 
 mkdir $DIR
