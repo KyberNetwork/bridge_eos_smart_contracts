@@ -13,10 +13,7 @@ cd $DIR
 git clone $REPO
 cd bridge_eos_smart_contracts
 git checkout $BRANCH
-git submodule update --init --recursive
-cd ethashproof; ./build.sh; cd ..
-cd eth-proof; npm install; cd ..
-npm install
+bash scripts/build.sh
 
 mkdir tmp #dir for caching relay information
 cp -rf $EXISTING_TMP_DIR/* tmp/

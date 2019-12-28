@@ -1,4 +1,4 @@
-bash scripts/compile.sh
+bash scripts/compile_contracts.sh
 bash scripts/local/bridge_bringup.sh
 bash scripts/local/issue_bringup.sh
 node apps/relay-app/relay-app.js --cfg scripts/local/relay_app_sample_input/cfg.json --genesis=8123001 --start=8123001 --end=8123306

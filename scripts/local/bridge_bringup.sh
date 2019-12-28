@@ -1,7 +1,7 @@
 set -x
 
 # compile contracts
-# bash scripts/compile.sh
+# bash scripts/compile_contracts.sh
 
 # create bridge account
 BRIDGE_ACCOUNT=bridge
