@@ -20,7 +20,7 @@
   "dependencies": {
     "eosjs": "^16.0.8",
     "node-rest-client-promise": "^3.1.1",
-    "web3": "^1.2.2",
+    "web3": "^4.0.2",
     "yargs": "^14.2.0",
     "await-exec": "^0.1.2",
     "bignumber.js": "^8.0.1",
